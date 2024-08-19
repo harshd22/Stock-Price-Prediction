@@ -14,30 +14,33 @@ from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
+from yahooquery import Ticker
 
-
-
-st.title('Stock Price Predictions')
+st.title('Stock Price Predictions and News')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by [Harsh Dugad](www.linkedin.com/in/harsh-dugad-90067923b)")
+st.sidebar.info("Created and designed by [Vikas Sharma](https://www.linkedin.com/in/vikas-sharma005/)")
 
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize','Recent Data', 'Predict'])
+    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Predict', 'News'])
     if option == 'Visualize':
         tech_indicators()
     elif option == 'Recent Data':
         dataframe()
-    else:
+    elif option == 'Predict':
         predict()
-
-
+    else:
+        news()
 
 @st.cache_resource
 def download_data(op, start_date, end_date):
     df = yf.download(op, start=start_date, end=end_date, progress=False)
     return df
 
-
+def fetch_news(symbol, start_date, end_date):
+    ticker = Ticker(symbol)
+    news_items = ticker.news
+    filtered_news = [item for item in news_items if start_date <= datetime.datetime.strptime(item['providerPublishTime'], "%Y-%m-%dT%H:%M:%S.%fZ").date() <= end_date]
+    return filtered_news
 
 option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
 option = option.upper()
@@ -48,84 +51,89 @@ start_date = st.sidebar.date_input('Start Date', value=before)
 end_date = st.sidebar.date_input('End date', today)
 if st.sidebar.button('Send'):
     if start_date < end_date:
-        st.sidebar.success('Start date: `%s`\n\nEnd date: `%s`' %(start_date, end_date))
-        download_data(option, start_date, end_date)
+        st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
+        data = download_data(option, start_date, end_date)
+        if data.empty:
+            st.sidebar.error(f'No data found for symbol `{option}`')
+        else:
+            st.sidebar.success(f'Data successfully retrieved for `{option}`')
     else:
         st.sidebar.error('Error: End date must fall after start date')
 
-
-
-
-data = download_data(option, start_date, end_date)
 scaler = StandardScaler()
 
 def tech_indicators():
     st.header('Technical Indicators')
-    option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
+    if not data.empty:
+        option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
 
-    # Bollinger bands
-    bb_indicator = BollingerBands(data.Close)
-    bb = data
-    bb['bb_h'] = bb_indicator.bollinger_hband()
-    bb['bb_l'] = bb_indicator.bollinger_lband()
-    # Creating a new dataframe
-    bb = bb[['Close', 'bb_h', 'bb_l']]
-    # MACD
-    macd = MACD(data.Close).macd()
-    # RSI
-    rsi = RSIIndicator(data.Close).rsi()
-    # SMA
-    sma = SMAIndicator(data.Close, window=14).sma_indicator()
-    # EMA
-    ema = EMAIndicator(data.Close).ema_indicator()
+        # Bollinger bands
+        bb_indicator = BollingerBands(data.Close)
+        bb = data
+        bb['bb_h'] = bb_indicator.bollinger_hband()
+        bb['bb_l'] = bb_indicator.bollinger_lband()
+        # Creating a new dataframe
+        bb = bb[['Close', 'bb_h', 'bb_l']]
+        # MACD
+        macd = MACD(data.Close).macd()
+        # RSI
+        rsi = RSIIndicator(data.Close).rsi()
+        # SMA
+        sma = SMAIndicator(data.Close, window=14).sma_indicator()
+        # EMA
+        ema = EMAIndicator(data.Close).ema_indicator()
 
-    if option == 'Close':
-        st.write('Close Price')
-        st.line_chart(data.Close)
-    elif option == 'BB':
-        st.write('BollingerBands')
-        st.line_chart(bb)
-    elif option == 'MACD':
-        st.write('Moving Average Convergence Divergence')
-        st.line_chart(macd)
-    elif option == 'RSI':
-        st.write('Relative Strength Indicator')
-        st.line_chart(rsi)
-    elif option == 'SMA':
-        st.write('Simple Moving Average')
-        st.line_chart(sma)
+        if option == 'Close':
+            st.write('Close Price')
+            st.line_chart(data.Close)
+        elif option == 'BB':
+            st.write('BollingerBands')
+            st.line_chart(bb)
+        elif option == 'MACD':
+            st.write('Moving Average Convergence Divergence')
+            st.line_chart(macd)
+        elif option == 'RSI':
+            st.write('Relative Strength Indicator')
+            st.line_chart(rsi)
+        elif option == 'SMA':
+            st.write('Simple Moving Average')
+            st.line_chart(sma)
+        else:
+            st.write('Exponential Moving Average')
+            st.line_chart(ema)
     else:
-        st.write('Expoenetial Moving Average')
-        st.line_chart(ema)
-
+        st.write('No data available to visualize.')
 
 def dataframe():
     st.header('Recent Data')
-    st.dataframe(data.tail(10))
-
-
+    if not data.empty:
+        st.dataframe(data.tail(10))
+    else:
+        st.write('No data available to display.')
 
 def predict():
-    model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
-    num = st.number_input('How many days forecast?', value=5)
-    num = int(num)
-    if st.button('Predict'):
-        if model == 'LinearRegression':
-            engine = LinearRegression()
-            model_engine(engine, num)
-        elif model == 'RandomForestRegressor':
-            engine = RandomForestRegressor()
-            model_engine(engine, num)
-        elif model == 'ExtraTreesRegressor':
-            engine = ExtraTreesRegressor()
-            model_engine(engine, num)
-        elif model == 'KNeighborsRegressor':
-            engine = KNeighborsRegressor()
-            model_engine(engine, num)
-        else:
-            engine = XGBRegressor()
-            model_engine(engine, num)
-
+    if not data.empty:
+        model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
+        num = st.number_input('How many days forecast?', value=5)
+        num = int(num)
+        if st.button('Predict'):
+            if model == 'LinearRegression':
+                engine = LinearRegression()
+                model_engine(engine, num)
+            elif model == 'RandomForestRegressor':
+                engine = RandomForestRegressor()
+                model_engine(engine, num)
+            elif model == 'ExtraTreesRegressor':
+                engine = ExtraTreesRegressor()
+                model_engine(engine, num)
+            elif model == 'KNeighborsRegressor':
+                engine = KNeighborsRegressor()
+                model_engine(engine, num)
+            else:
+                engine = XGBRegressor()
+                model_engine(engine, num)
+    else:
+        st.write('No data available to make predictions.')
 
 def model_engine(model, num):
     # getting only the closing price
@@ -149,8 +157,7 @@ def model_engine(model, num):
     # training the model
     model.fit(x_train, y_train)
     preds = model.predict(x_test)
-    st.text(f'r2_score: {r2_score(y_test, preds)} \
-            \nMAE: {mean_absolute_error(y_test, preds)}')
+    st.text(f'r2_score: {r2_score(y_test, preds)} \nMAE: {mean_absolute_error(y_test, preds)}')
     # predicting stock price based on the number of days
     forecast_pred = model.predict(x_forecast)
     day = 1
@@ -158,6 +165,20 @@ def model_engine(model, num):
         st.text(f'Day {day}: {i}')
         day += 1
 
+def news():
+    st.header('Top News Articles')
+    if not data.empty:
+        articles = fetch_news(option, start_date, end_date)
+        if articles:
+            for article in articles:
+                st.subheader(article['title'])
+                st.write(article['summary'])
+                st.write(f"[Read more]({article['link']})")
+                st.write("---")
+        else:
+            st.write("No news articles found.")
+    else:
+        st.write('No data available to fetch news.')
 
 if __name__ == '__main__':
     main()

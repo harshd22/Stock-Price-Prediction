@@ -16,53 +16,47 @@ from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 from yahooquery import Ticker
 
-st.title('Stock Price Predictions and News')
+st.title('Stock Price Predictions')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by [Vikas Sharma](https://www.linkedin.com/in/vikas-sharma005/)")
+st.sidebar.info("Created and designed by [Harsh Dugad](www.linkedin.com/in/harsh-dugad-90067923b)")
+
+# Global variable
+data = pd.DataFrame()
 
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Predict', 'News'])
-    if option == 'Visualize':
-        tech_indicators()
-    elif option == 'Recent Data':
-        dataframe()
-    elif option == 'Predict':
-        predict()
-    else:
-        news()
+    global data
+    option = st.sidebar.selectbox('Make a choice', ['Visualize','Recent Data', 'Predict', 'News'])
+    
+    # Get user inputs
+    stock_symbol = st.sidebar.text_input('Enter a Stock Symbol', value='SPY').upper()
+    today = datetime.date.today()
+    duration = st.sidebar.number_input('Enter the duration', value=3000)
+    before = today - datetime.timedelta(days=duration)
+    start_date = st.sidebar.date_input('Start Date', value=before)
+    end_date = st.sidebar.date_input('End Date', today)
+    
+    if st.sidebar.button('Send'):
+        if start_date < end_date:
+            st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
+            data = download_data(stock_symbol, start_date, end_date)
+            if option == 'Visualize':
+                tech_indicators()
+            elif option == 'Recent Data':
+                dataframe()
+            elif option == 'Predict':
+                predict()
+            elif option == 'News':
+                news()
+        else:
+            st.sidebar.error('Error: End date must fall after start date')
 
 @st.cache_resource
 def download_data(op, start_date, end_date):
     df = yf.download(op, start=start_date, end=end_date, progress=False)
     return df
 
-def fetch_news(symbol, start_date, end_date):
-    ticker = Ticker(symbol)
-    news_items = ticker.news
-    filtered_news = [item for item in news_items if start_date <= datetime.datetime.strptime(item['providerPublishTime'], "%Y-%m-%dT%H:%M:%S.%fZ").date() <= end_date]
-    return filtered_news
-
-option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
-option = option.upper()
-today = datetime.date.today()
-duration = st.sidebar.number_input('Enter the duration', value=3000)
-before = today - datetime.timedelta(days=duration)
-start_date = st.sidebar.date_input('Start Date', value=before)
-end_date = st.sidebar.date_input('End date', today)
-if st.sidebar.button('Send'):
-    if start_date < end_date:
-        st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
-        data = download_data(option, start_date, end_date)
-        if data.empty:
-            st.sidebar.error(f'No data found for symbol `{option}`')
-        else:
-            st.sidebar.success(f'Data successfully retrieved for `{option}`')
-    else:
-        st.sidebar.error('Error: End date must fall after start date')
-
-scaler = StandardScaler()
-
 def tech_indicators():
+    global data
     st.header('Technical Indicators')
     if not data.empty:
         option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
@@ -102,16 +96,18 @@ def tech_indicators():
             st.write('Exponential Moving Average')
             st.line_chart(ema)
     else:
-        st.write('No data available to visualize.')
+        st.write("No data available. Please fetch data first.")
 
 def dataframe():
+    global data
     st.header('Recent Data')
     if not data.empty:
         st.dataframe(data.tail(10))
     else:
-        st.write('No data available to display.')
+        st.write("No data available. Please fetch data first.")
 
 def predict():
+    global data
     if not data.empty:
         model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
         num = st.number_input('How many days forecast?', value=5)
@@ -133,15 +129,17 @@ def predict():
                 engine = XGBRegressor()
                 model_engine(engine, num)
     else:
-        st.write('No data available to make predictions.')
+        st.write("No data available. Please fetch data first.")
 
 def model_engine(model, num):
+    global data
     # getting only the closing price
     df = data[['Close']]
     # shifting the closing price based on number of days forecast
     df['preds'] = data.Close.shift(-num)
     # scaling the data
     x = df.drop(['preds'], axis=1).values
+    scaler = StandardScaler()
     x = scaler.fit_transform(x)
     # storing the last num_days data
     x_forecast = x[-num:]
@@ -165,15 +163,26 @@ def model_engine(model, num):
         st.text(f'Day {day}: {i}')
         day += 1
 
+def fetch_news(symbol, start_date, end_date):
+    try:
+        ticker = Ticker(symbol)
+        news_items = ticker.news
+        filtered_news = [item for item in news_items if start_date <= datetime.datetime.strptime(item['providerPublishTime'], "%Y-%m-%dT%H:%M:%S.%fZ").date() <= end_date]
+        return filtered_news
+    except Exception as e:
+        st.error(f"Error fetching news: {e}")
+        return []
+
 def news():
+    global data
     st.header('Top News Articles')
     if not data.empty:
         articles = fetch_news(option, start_date, end_date)
         if articles:
             for article in articles:
-                st.subheader(article['title'])
-                st.write(article['summary'])
-                st.write(f"[Read more]({article['link']})")
+                st.subheader(article.get('title', 'No Title'))
+                st.write(article.get('summary', 'No Summary'))
+                st.write(f"[Read more]({article.get('link', '#')})")
                 st.write("---")
         else:
             st.write("No news articles found.")

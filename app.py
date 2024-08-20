@@ -37,11 +37,10 @@ def get_stock_info(op):
     try:
         ticker = yf.Ticker(op)
         info = ticker.info
-        earnings = ticker.calendar
-        return info, earnings
+        return info
     except Exception as e:
         st.error(f"Error: {e}")
-        return {}, None
+        return {}
 
 # Main function to handle app logic
 def main():
@@ -83,7 +82,7 @@ if st.sidebar.button('Send'):
         st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
         interval = interval_map[time_frame]
         data = get_stock_data(option, start_date, end_date, interval=interval)
-        info, earnings = get_stock_info(option)
+        info = get_stock_info(option)
         if data.empty:
             st.sidebar.error(f'No data found for symbol `{option}` with interval `{interval}`')
         else:
@@ -93,7 +92,7 @@ if st.sidebar.button('Send'):
 
 # Download the data globally for access in different functions
 data = get_stock_data(option, start_date, end_date, interval=interval_map.get(time_frame, '1d'))
-info, earnings = get_stock_info(option)
+info = get_stock_info(option)
 scaler = StandardScaler()
 
 # Technical indicators visualization
@@ -177,34 +176,32 @@ def financial_info():
     else:
         st.write('No financial information available.')
 
-    if earnings is not None and not earnings.empty:
-        st.write('**Upcoming Earnings Dates:**')
-        st.write(earnings)
-    else:
-        st.write('No earnings data available.')
-
-# Predict stock price
+# Prediction function
 def predict():
-    model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
-    num = st.number_input('How many days forecast?', value=5)
-    num = int(num)
-    if st.button('Predict'):
-        if model == 'LinearRegression':
-            engine = LinearRegression()
-            model_engine(engine, num)
-        elif model == 'RandomForestRegressor':
-            engine = RandomForestRegressor()
-            model_engine(engine, num)
-        elif model == 'ExtraTreesRegressor':
-            engine = ExtraTreesRegressor()
-            model_engine(engine, num)
-        elif model == 'KNeighborsRegressor':
-            engine = KNeighborsRegressor()
-            model_engine(engine, num)
-        else:
-            engine = XGBRegressor()
-            model_engine(engine, num)
+    if not data.empty:
+        model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
+        num = st.number_input('How many days forecast?', value=5)
+        num = int(num)
+        if st.button('Predict'):
+            if model == 'LinearRegression':
+                engine = LinearRegression()
+                model_engine(engine, num)
+            elif model == 'RandomForestRegressor':
+                engine = RandomForestRegressor()
+                model_engine(engine, num)
+            elif model == 'ExtraTreesRegressor':
+                engine = ExtraTreesRegressor()
+                model_engine(engine, num)
+            elif model == 'KNeighborsRegressor':
+                engine = KNeighborsRegressor()
+                model_engine(engine, num)
+            else:
+                engine = XGBRegressor()
+                model_engine(engine, num)
+    else:
+        st.write('No data available to make predictions.')
 
+# Model engine for predictions
 def model_engine(model, num):
     # getting only the closing price
     df = data[['Close']]

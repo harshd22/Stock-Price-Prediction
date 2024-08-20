@@ -167,12 +167,29 @@ def candlestick_chart():
 def financial_info():
     st.header('Financial Information')
     if info:
-        st.write(f"**Market Capitalization:** ${info.get('marketCap', 'N/A'):,}")
+        # Function to format large numbers
+        def format_value(value):
+            if value is None:
+                return 'N/A'
+            if value >= 1e12:
+                return f"${value / 1e12:.2f} Trillion"
+            elif value >= 1e9:
+                return f"${value / 1e9:.2f} Billion"
+            elif value >= 1e6:
+                return f"${value / 1e6:.2f} Million"
+            else:
+                return f"${value:.2f}"
+
+        st.write(f"**Market Capitalization:** {format_value(info.get('marketCap', None))}")
         st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
         st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'N/A')}")
-        st.write(f"**Dividend Yield:** {info.get('dividendYield', 'N/A') * 100:.2f}%")
+        dividend_yield = info.get('dividendYield', None)
+        if dividend_yield is not None:
+            st.write(f"**Dividend Yield:** {dividend_yield * 100:.2f}%")
+        else:
+            st.write("**Dividend Yield:** No information available")
         st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'N/A')}")
-        st.write(f"**Enterprise Value:** ${info.get('enterpriseValue', 'N/A'):,}")
+        st.write(f"**Enterprise Value:** {format_value(info.get('enterpriseValue', None))}")
     else:
         st.write('No financial information available.')
 
@@ -218,19 +235,19 @@ def model_engine(model, num):
     y = df.preds.values
     # selecting the required values for training
     y = y[:-num]
-
-    # Splitting the data
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=7)
-    # Training the model
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=0)
     model.fit(x_train, y_train)
-    preds = model.predict(x_test)
-    st.text(f'r2_score: {r2_score(y_test, preds)} \nMAE: {mean_absolute_error(y_test, preds)}')
-    # Predicting stock price based on the number of days
-    forecast_pred = model.predict(x_forecast)
-    day = 1
-    for i in forecast_pred:
-        st.text(f'Day {day}: {i}')
-        day += 1
+    y_pred = model.predict(x_test)
+    r2 = r2_score(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    st.write(f"**R-squared Score:** {r2:.2f}")
+    st.write(f"**Mean Absolute Error:** {mae:.2f}")
+    # making predictions
+    forecast = model.predict(x_forecast)
+    forecast_dates = [data.index[-1] + datetime.timedelta(days=i) for i in range(1, num + 1)]
+    forecast_df = pd.DataFrame(data={'Date': forecast_dates, 'Forecast': forecast})
+    st.write(forecast_df)
 
-if __name__ == '__main__':
+# Run the app
+if __name__ == "__main__":
     main()

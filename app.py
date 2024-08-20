@@ -5,23 +5,16 @@ from ta.volatility import BollingerBands
 from ta.trend import MACD, EMAIndicator, SMAIndicator
 from ta.momentum import RSIIndicator
 import datetime
-from datetime import date
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.neighbors import KNeighborsRegressor
-from xgboost import XGBRegressor
-from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
-from sklearn.metrics import r2_score, mean_absolute_error
 import plotly.graph_objects as go
+import requests
 
 # Title and sidebar information
 st.title('Stock Price Predictions')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by [Harsh Dugad](www.linkedin.com/in/harsh-dugad-90067923b)")
+st.sidebar.info("Created and designed by [Harsh Dugad](https://www.linkedin.com/in/harsh-dugad-90067923b)")
 
-# Function to get stock data and financials
-@st.cache_resource
+# Function to get stock data
+@st.cache
 def get_stock_data(op, start_date, end_date, interval='1d'):
     try:
         df = yf.download(op, start=start_date, end=end_date, interval=interval, progress=False)
@@ -32,7 +25,8 @@ def get_stock_data(op, start_date, end_date, interval='1d'):
         st.error(f"Error: {e}")
         return pd.DataFrame()
 
-@st.cache_resource
+# Function to get stock info
+@st.cache
 def get_stock_info(op):
     try:
         ticker = yf.Ticker(op)
@@ -42,9 +36,37 @@ def get_stock_info(op):
         st.error(f"Error: {e}")
         return {}
 
+# Function to get market indices data
+def get_market_indices():
+    indices = {
+        'Nifty 50': '^NSEI',
+        'Bank Nifty': '^NSEBANK',
+        'Sensex': '^BSESN',
+        'S&P 500': '^GSPC',
+        'Dow Jones': '^DJI',
+        'NASDAQ': '^IXIC',
+        'FTSE 100': '^FTSE',
+        'DAX': '^GDAXI',
+        'Nikkei 225': '^N225',
+        'Shanghai Composite': '000001.SS',
+        'Hang Seng': '^HSI',
+        'Straits Times': '^STI'
+    }
+    
+    data = {}
+    for name, symbol in indices.items():
+        try:
+            df = yf.download(symbol, period='1d', interval='1d', progress=False)
+            data[name] = df['Close'].iloc[-1]  # Last closing price
+        except Exception as e:
+            data[name] = 'Error'
+    
+    return data
+
 # Main function to handle app logic
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info', 'Predict'])
+    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info'])
+    
     if option == 'Visualize':
         tech_indicators()
     elif option == 'Recent Data':
@@ -53,8 +75,6 @@ def main():
         candlestick_chart()
     elif option == 'Financial Info':
         financial_info()
-    else:
-        predict()
 
 # Sidebar input fields
 option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
@@ -63,7 +83,7 @@ today = datetime.date.today()
 duration = st.sidebar.number_input('Enter the duration (in days)', value=3000)
 before = today - datetime.timedelta(days=duration)
 start_date = st.sidebar.date_input('Start Date', value=before)
-end_date = st.sidebar.date_input('End date', today)
+end_date = st.sidebar.date_input('End Date', today)
 
 # Dropdown for candlestick time frame
 time_frame = st.sidebar.selectbox('Select Time Frame', ['1d', '1wk', '1mo', '1y'])
@@ -90,10 +110,12 @@ if st.sidebar.button('Send'):
     else:
         st.sidebar.error('Error: End date must fall after start date')
 
-# Download the data globally for access in different functions
-data = get_stock_data(option, start_date, end_date, interval=interval_map.get(time_frame, '1d'))
-info = get_stock_info(option)
-scaler = StandardScaler()
+# Display real-time market indices
+def display_indices():
+    st.header('Market Indices')
+    indices_data = get_market_indices()
+    for name, price in indices_data.items():
+        st.write(f"**{name}:** {price if price != 'Error' else 'Error fetching data'}")
 
 # Technical indicators visualization
 def tech_indicators():
@@ -102,15 +124,11 @@ def tech_indicators():
         option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
 
         # Bollinger bands
-        if 'Close' in data.columns:
-            bb_indicator = BollingerBands(data['Close'])
-            bb = data.copy()
-            bb['bb_h'] = bb_indicator.bollinger_hband()
-            bb['bb_l'] = bb_indicator.bollinger_lband()
-            bb = bb[['Close', 'bb_h', 'bb_l']]
-        else:
-            st.write('Data is missing or empty.')
-            return
+        bb_indicator = BollingerBands(data['Close'])
+        bb = data.copy()
+        bb['bb_h'] = bb_indicator.bollinger_hband()
+        bb['bb_l'] = bb_indicator.bollinger_lband()
+        bb = bb[['Close', 'bb_h', 'bb_l']]
 
         # MACD
         macd = MACD(data['Close']).macd()
@@ -125,19 +143,19 @@ def tech_indicators():
             st.write('Close Price')
             st.line_chart(data['Close'])
         elif option == 'BB':
-            st.write('BollingerBands')
+            st.write('Bollinger Bands')
             st.line_chart(bb)
         elif option == 'MACD':
-            st.write('Moving Average Convergence Divergence')
+            st.write('MACD')
             st.line_chart(macd)
         elif option == 'RSI':
-            st.write('Relative Strength Indicator')
+            st.write('RSI')
             st.line_chart(rsi)
         elif option == 'SMA':
-            st.write('Simple Moving Average')
+            st.write('SMA')
             st.line_chart(sma)
         else:
-            st.write('Exponential Moving Average')
+            st.write('EMA')
             st.line_chart(ema)
     else:
         st.write('No data available to visualize.')
@@ -171,58 +189,33 @@ def candlestick_chart():
 def financial_info():
     st.header('Financial Information')
     if info:
-        def format_value(value):
-            if value is None:
-                return 'N/A'
-            if value >= 1e12:
-                return f"{value/1e12:.2f} Trillion"
-            elif value >= 1e9:
-                return f"{value/1e9:.2f} Billion"
-            elif value >= 1e6:
-                return f"{value/1e6:.2f} Million"
-            return f"{value:.2f}"
-
-        st.write(f"**Market Capitalization:** {format_value(info.get('marketCap', 'N/A'))}")
+        st.write(f"**Market Capitalization:** {format_market_cap(info.get('marketCap', 'N/A'))}")
         st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
         st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'N/A')}")
-        st.write(f"**Dividend Yield:** {info.get('dividendYield', 'N/A') * 100:.2f}%")
+        st.write(f"**Dividend Yield:** {format_dividend_yield(info.get('dividendYield', 'N/A'))}")
         st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'N/A')}")
-        st.write(f"**Enterprise Value:** {format_value(info.get('enterpriseValue', 'N/A'))}")
-        st.write(f"**Revenue:** {format_value(info.get('totalRevenue', 'N/A'))}")
-        st.write(f"**Gross Profit:** {format_value(info.get('grossProfits', 'N/A'))}")
+        st.write(f"**Enterprise Value:** {format_market_cap(info.get('enterpriseValue', 'N/A'))}")
     else:
         st.write('No financial information available.')
 
-# Prediction model
-def predict():
-    st.header('Stock Price Prediction')
-    st.write('Select a model and view predictions for the selected stock.')
-    if not data.empty:
-        # Prepare data for modeling
-        data['Date'] = pd.to_datetime(data.index)
-        data['Year'] = data['Date'].dt.year
-        data['Month'] = data['Date'].dt.month
-        data['Day'] = data['Date'].dt.day
-        features = data[['Year', 'Month', 'Day']]
-        target = data['Close']
+# Format market capitalization and dividend yield
+def format_market_cap(value):
+    if isinstance(value, (int, float)):
+        if value >= 1e12:
+            return f"${value / 1e12:.2f} Trillion"
+        elif value >= 1e9:
+            return f"${value / 1e9:.2f} Billion"
+        elif value >= 1e6:
+            return f"${value / 1e6:.2f} Million"
+        else:
+            return f"${value:.2f}"
+    return value
 
-        X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=0)
+def format_dividend_yield(value):
+    if isinstance(value, (int, float)):
+        return f"{value * 100:.2f}%"
+    return value
 
-        models = {
-            'Linear Regression': LinearRegression(),
-            'KNN Regression': KNeighborsRegressor(),
-            'XGBoost': XGBRegressor(),
-            'Random Forest': RandomForestRegressor(),
-            'Extra Trees': ExtraTreesRegressor()
-        }
-
-        for model_name, model in models.items():
-            model.fit(X_train, y_train)
-            predictions = model.predict(X_test)
-            st.write(f"{model_name} - R^2 Score: {r2_score(y_test, predictions):.2f}")
-            st.write(f"{model_name} - Mean Absolute Error: {mean_absolute_error(y_test, predictions):.2f}")
-    else:
-        st.write('No data available for prediction.')
-
-if __name__ == "__main__":
+if __name__ == '__main__':
+    display_indices()  # Display market indices
     main()

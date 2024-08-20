@@ -1,10 +1,8 @@
 streamlit
-pandas
 yfinance
-ta
+pandas
+plotly
 scikit-learn
 xgboost
-plotly
 newsapi-python
-vaderSentiment
-nltk
+ta

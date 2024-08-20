@@ -13,18 +13,14 @@ from sklearn.neighbors import KNeighborsRegressor
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
-import plotly.graph_objects as go
+import plotly.graph_objects as go  # for candlestick chart
 from newsapi import NewsApiClient
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-import nltk
 
-nltk.download('vader_lexicon')
-
-# Initialize News API (replace 'YOUR_NEWSAPI_KEY' with your actual API key)
-newsapi = NewsApiClient(api_key='YOUR_NEWSAPI_KEY')
+# Initialize NewsAPI client
+newsapi = NewsApiClient(api_key="YOUR_NEWS_API_KEY")
 
 # Title and sidebar information
-st.title('Stock Price Predictions with News and Sentiment Analysis')
+st.title('Stock Price Predictions')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
 st.sidebar.info("Created and designed by [Harsh Dugad](www.linkedin.com/in/harsh-dugad-90067923b)")
 
@@ -50,25 +46,9 @@ def get_stock_info(op):
         st.error(f"Error: {e}")
         return {}
 
-# Function to fetch news articles
-@st.cache_resource
-def fetch_news(stock_symbol):
-    try:
-        news = newsapi.get_everything(q=stock_symbol, language='en', sort_by='relevancy', page_size=5)
-        return news['articles']
-    except Exception as e:
-        st.error(f"Error fetching news: {e}")
-        return []
-
-# Function to analyze sentiment
-def analyze_sentiment(text):
-    analyzer = SentimentIntensityAnalyzer()
-    sentiment = analyzer.polarity_scores(text)
-    return sentiment['compound']  # Return compound sentiment score
-
 # Main function to handle app logic
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info', 'Predict', 'News & Sentiment'])
+    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info', 'News', 'Predict'])
     if option == 'Visualize':
         tech_indicators()
     elif option == 'Recent Data':
@@ -77,8 +57,8 @@ def main():
         candlestick_chart()
     elif option == 'Financial Info':
         financial_info()
-    elif option == 'News & Sentiment':
-        news_sentiment_analysis()
+    elif option == 'News':
+        display_news(option)
     else:
         predict()
 
@@ -193,59 +173,89 @@ def candlestick_chart():
 def financial_info():
     st.header('Financial Information')
     if info:
-        market_cap = info.get('marketCap', None)
+        market_cap = info.get('marketCap')
         if market_cap:
-            if market_cap >= 1e12:
-                market_cap_str = f'{market_cap / 1e12:.2f} Trillion'
-            elif market_cap >= 1e9:
-                market_cap_str = f'{market_cap / 1e9:.2f} Billion'
-            elif market_cap >= 1e6:
-                market_cap_str = f'{market_cap / 1e6:.2f} Million'
+            if market_cap >= 1_000_000_000_000:
+                st.write(f"**Market Capitalization:** {market_cap / 1_000_000_000_000:.2f} Trillion")
+            elif market_cap >= 1_000_000_000:
+                st.write(f"**Market Capitalization:** {market_cap / 1_000_000_000:.2f} Billion")
             else:
-                market_cap_str = f'{market_cap:,}'
+                st.write(f"**Market Capitalization:** {market_cap / 1_000_000:.2f} Million")
         else:
-            market_cap_str = 'No information provided'
-
-        st.write(f"**Market Capitalization:** {market_cap_str}")
+            st.write("**Market Capitalization:** No information provided")
+        
         st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'No information provided')}")
         st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'No information provided')}")
-        st.write(f"**Dividend Yield:** {info.get('dividendYield', 'No information provided')}")
+        st.write(f"**Dividend Yield:** {info.get('dividendYield', 'No information provided') * 100:.2f}%")
         st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'No information provided')}")
         st.write(f"**Enterprise Value:** {info.get('enterpriseValue', 'No information provided')}")
     else:
         st.write('No financial information available.')
 
-# News and Sentiment Analysis
-def news_sentiment_analysis():
-    st.header('News and Sentiment Analysis')
-    news = fetch_news(option)
-    if news:
-        analyzer = SentimentIntensityAnalyzer()
-        for article in news:
-            title = article['title']
-            description = article['description']
-            url = article['url']
-            st.subheader(title)
-            st.write(description)
-            st.write(f"[Read more]({url})")
+# Display news related to the stock
+def display_news(symbol):
+    st.header(f"Top 10 News for {symbol}")
+    try:
+        news_data = newsapi.get_everything(q=symbol, language='en', sort_by='relevancy')
+        articles = news_data.get('articles', [])
+        
+        if articles:
+            for article in articles[:10]:  # Display only top 10 articles
+                st.write(f"**{article['title']}**")
+                st.write(article['description'])
+                st.write(f"[Read more]({article['url']})")
+                st.write("---")
+        else:
+            st.write("No news articles found for this stock.")
+    
+    except Exception as e:
+        st.error(f"Error fetching news: {e}")
 
-            # Sentiment analysis
-            sentiment_score = analyze_sentiment(description)
-            if sentiment_score > 0.05:
-                sentiment = 'Positive'
-            elif sentiment_score < -0.05:
-                sentiment = 'Negative'
-            else:
-                sentiment = 'Neutral'
-            st.write(f"Sentiment: **{sentiment}** (Score: {sentiment_score:.2f})")
-            st.write("---")
-    else:
-        st.write("No news available.")
-
-# Prediction function placeholder (You can add your own model predictions here)
+# Prediction function
 def predict():
-    st.header('Prediction')
-    st.write('Prediction logic here.')
+    if not data.empty:
+        model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
+        num = st.number_input('How many days forecast?', value=5)
+        num = int(num)
+        if st.button('Predict'):
+            if model == 'LinearRegression':
+                engine = LinearRegression()
+                model_engine(engine, num)
+            elif model == 'RandomForestRegressor':
+                engine = RandomForestRegressor(n_estimators=100, random_state=0)
+                model_engine(engine, num)
+            elif model == 'ExtraTreesRegressor':
+                engine = ExtraTreesRegressor(n_estimators=100, random_state=0)
+                model_engine(engine, num)
+            elif model == 'KNeighborsRegressor':
+                engine = KNeighborsRegressor(n_neighbors=5)
+                model_engine(engine, num)
+            else:
+                engine = XGBRegressor(n_estimators=100, random_state=0)
+                model_engine(engine, num)
+    else:
+        st.write('No data available for prediction.')
+
+# Train and predict stock prices
+def model_engine(model, num):
+    df = data[['Close']].copy()
+    df['Prediction'] = df['Close'].shift(-num)
+    X = df.drop(['Prediction'], axis=1)[:-num]
+    y = df['Prediction'][:-num]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    score = r2_score(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    st.write(f'R2 score: {score}')
+    st.write(f'Mean Absolute Error: {mae}')
+    x_forecast = df.drop(['Prediction'], axis=1)[-num:]
+    x_forecast = scaler.transform(x_forecast)
+    forecast = model.predict(x_forecast)
+    st.write(f'Next {num} days forecast:')
+    st.write(forecast)
 
 if __name__ == "__main__":
     main()

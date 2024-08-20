@@ -5,16 +5,23 @@ from ta.volatility import BollingerBands
 from ta.trend import MACD, EMAIndicator, SMAIndicator
 from ta.momentum import RSIIndicator
 import datetime
-import plotly.graph_objects as go
-import requests
+from datetime import date
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+from xgboost import XGBRegressor
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
+from sklearn.metrics import r2_score, mean_absolute_error
+import plotly.graph_objects as go  # for candlestick chart
 
 # Title and sidebar information
 st.title('Stock Price Predictions')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by [Harsh Dugad](https://www.linkedin.com/in/harsh-dugad-90067923b)")
+st.sidebar.info("Created and designed by [Harsh Dugad](www.linkedin.com/in/harsh-dugad-90067923b)")
 
-# Function to get stock data
-@st.cache
+# Function to get stock data and financials
+@st.cache_resource
 def get_stock_data(op, start_date, end_date, interval='1d'):
     try:
         df = yf.download(op, start=start_date, end=end_date, interval=interval, progress=False)
@@ -23,10 +30,9 @@ def get_stock_data(op, start_date, end_date, interval='1d'):
         return df
     except Exception as e:
         st.error(f"Error: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame()  # Return an empty DataFrame in case of an error
 
-# Function to get stock info
-@st.cache
+@st.cache_resource
 def get_stock_info(op):
     try:
         ticker = yf.Ticker(op)
@@ -36,37 +42,9 @@ def get_stock_info(op):
         st.error(f"Error: {e}")
         return {}
 
-# Function to get market indices data
-def get_market_indices():
-    indices = {
-        'Nifty 50': '^NSEI',
-        'Bank Nifty': '^NSEBANK',
-        'Sensex': '^BSESN',
-        'S&P 500': '^GSPC',
-        'Dow Jones': '^DJI',
-        'NASDAQ': '^IXIC',
-        'FTSE 100': '^FTSE',
-        'DAX': '^GDAXI',
-        'Nikkei 225': '^N225',
-        'Shanghai Composite': '000001.SS',
-        'Hang Seng': '^HSI',
-        'Straits Times': '^STI'
-    }
-    
-    data = {}
-    for name, symbol in indices.items():
-        try:
-            df = yf.download(symbol, period='1d', interval='1d', progress=False)
-            data[name] = df['Close'].iloc[-1]  # Last closing price
-        except Exception as e:
-            data[name] = 'Error'
-    
-    return data
-
 # Main function to handle app logic
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info'])
-    
+    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info', 'Predict'])
     if option == 'Visualize':
         tech_indicators()
     elif option == 'Recent Data':
@@ -75,6 +53,8 @@ def main():
         candlestick_chart()
     elif option == 'Financial Info':
         financial_info()
+    else:
+        predict()
 
 # Sidebar input fields
 option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
@@ -83,7 +63,7 @@ today = datetime.date.today()
 duration = st.sidebar.number_input('Enter the duration (in days)', value=3000)
 before = today - datetime.timedelta(days=duration)
 start_date = st.sidebar.date_input('Start Date', value=before)
-end_date = st.sidebar.date_input('End Date', today)
+end_date = st.sidebar.date_input('End date', today)
 
 # Dropdown for candlestick time frame
 time_frame = st.sidebar.selectbox('Select Time Frame', ['1d', '1wk', '1mo', '1y'])
@@ -110,12 +90,10 @@ if st.sidebar.button('Send'):
     else:
         st.sidebar.error('Error: End date must fall after start date')
 
-# Display real-time market indices
-def display_indices():
-    st.header('Market Indices')
-    indices_data = get_market_indices()
-    for name, price in indices_data.items():
-        st.write(f"**{name}:** {price if price != 'Error' else 'Error fetching data'}")
+# Download the data globally for access in different functions
+data = get_stock_data(option, start_date, end_date, interval=interval_map.get(time_frame, '1d'))
+info = get_stock_info(option)
+scaler = StandardScaler()
 
 # Technical indicators visualization
 def tech_indicators():
@@ -124,38 +102,38 @@ def tech_indicators():
         option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
 
         # Bollinger bands
-        bb_indicator = BollingerBands(data['Close'])
+        bb_indicator = BollingerBands(data.Close)
         bb = data.copy()
         bb['bb_h'] = bb_indicator.bollinger_hband()
         bb['bb_l'] = bb_indicator.bollinger_lband()
         bb = bb[['Close', 'bb_h', 'bb_l']]
 
         # MACD
-        macd = MACD(data['Close']).macd()
+        macd = MACD(data.Close).macd()
         # RSI
-        rsi = RSIIndicator(data['Close']).rsi()
+        rsi = RSIIndicator(data.Close).rsi()
         # SMA
-        sma = SMAIndicator(data['Close'], window=14).sma_indicator()
+        sma = SMAIndicator(data.Close, window=14).sma_indicator()
         # EMA
-        ema = EMAIndicator(data['Close']).ema_indicator()
+        ema = EMAIndicator(data.Close).ema_indicator()
 
         if option == 'Close':
             st.write('Close Price')
-            st.line_chart(data['Close'])
+            st.line_chart(data.Close)
         elif option == 'BB':
-            st.write('Bollinger Bands')
+            st.write('BollingerBands')
             st.line_chart(bb)
         elif option == 'MACD':
-            st.write('MACD')
+            st.write('Moving Average Convergence Divergence')
             st.line_chart(macd)
         elif option == 'RSI':
-            st.write('RSI')
+            st.write('Relative Strength Indicator')
             st.line_chart(rsi)
         elif option == 'SMA':
-            st.write('SMA')
+            st.write('Simple Moving Average')
             st.line_chart(sma)
         else:
-            st.write('EMA')
+            st.write('Exponential Moving Average')
             st.line_chart(ema)
     else:
         st.write('No data available to visualize.')
@@ -189,33 +167,90 @@ def candlestick_chart():
 def financial_info():
     st.header('Financial Information')
     if info:
-        st.write(f"**Market Capitalization:** {format_market_cap(info.get('marketCap', 'N/A'))}")
+        # Function to format large numbers
+        def format_value(value):
+            if value is None:
+                return 'N/A'
+            if value >= 1e12:
+                return f"{value / 1e12:.2f} Trillion"
+            elif value >= 1e9:
+                return f"{value / 1e9:.2f} Billion"
+            elif value >= 1e6:
+                return f"{value / 1e6:.2f} Million"
+            else:
+                return f"{value:.2f}"
+
+        st.write(f"**Market Capitalization:** {format_value(info.get('marketCap', None))}")
         st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
         st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'N/A')}")
-        st.write(f"**Dividend Yield:** {format_dividend_yield(info.get('dividendYield', 'N/A'))}")
+        dividend_yield = info.get('dividendYield', None)
+        if dividend_yield is not None:
+            st.write(f"**Dividend Yield:** {dividend_yield * 100:.2f}%")
+        else:
+            st.write("**Dividend Yield:** No information available")
         st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'N/A')}")
-        st.write(f"**Enterprise Value:** {format_market_cap(info.get('enterpriseValue', 'N/A'))}")
+        st.write(f"**Enterprise Value:** {format_value(info.get('enterpriseValue', None))}")
     else:
         st.write('No financial information available.')
 
-# Format market capitalization and dividend yield
-def format_market_cap(value):
-    if isinstance(value, (int, float)):
-        if value >= 1e12:
-            return f"${value / 1e12:.2f} Trillion"
-        elif value >= 1e9:
-            return f"${value / 1e9:.2f} Billion"
-        elif value >= 1e6:
-            return f"${value / 1e6:.2f} Million"
-        else:
-            return f"${value:.2f}"
-    return value
+# Prediction function
+def predict():
+    if not data.empty:
+        model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
+        num = st.number_input('How many days forecast?', value=5)
+        num = int(num)
+        if st.button('Predict'):
+            if model == 'LinearRegression':
+                engine = LinearRegression()
+                model_engine(engine, num)
+            elif model == 'RandomForestRegressor':
+                engine = RandomForestRegressor()
+                model_engine(engine, num)
+            elif model == 'ExtraTreesRegressor':
+                engine = ExtraTreesRegressor()
+                model_engine(engine, num)
+            elif model == 'KNeighborsRegressor':
+                engine = KNeighborsRegressor()
+                model_engine(engine, num)
+            else:
+                engine = XGBRegressor()
+                model_engine(engine, num)
+    else:
+        st.write('No data available to make predictions.')
 
-def format_dividend_yield(value):
-    if isinstance(value, (int, float)):
-        return f"{value * 100:.2f}%"
-    return value
+# Model engine for predictions
+def model_engine(model, num):
+    # getting only the closing price
+    df = data[['Close']]
+    # shifting the closing price based on number of days forecast
+    df['preds'] = data.Close.shift(-num)
+    # scaling the data
+    x = df.drop(['preds'], axis=1).values
+    x = scaler.fit_transform(x)
+    # storing the last num_days data
+    x_forecast = x[-num:]
+    # selecting the required values for training
+    x = x[:-num]
+    # getting the preds column
+    y = df.preds.values
+    # selecting the required values for training
+    y = y[:-num]
 
-if __name__ == '__main__':
-    display_indices()  # Display market indices
+    # Splitting the data
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=0)
+    # Training the model
+    model.fit(x_train, y_train)
+    y_pred = model.predict(x_test)
+    r2 = r2_score(y_test, y_pred)
+    mae = mean_absolute_error(y_test, y_pred)
+    st.write(f"**R-squared Score:** {r2:.2f}")
+    st.write(f"**Mean Absolute Error:** {mae:.2f}")
+    # making predictions
+    forecast = model.predict(x_forecast)
+    forecast_dates = [data.index[-1] + datetime.timedelta(days=i) for i in range(1, num + 1)]
+    forecast_df = pd.DataFrame(data={'Date': forecast_dates, 'Forecast': forecast})
+    st.write(forecast_df)
+
+# Run the app
+if __name__ == "__main__":
     main()

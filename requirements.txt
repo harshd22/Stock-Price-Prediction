@@ -4,4 +4,4 @@ yfinance
 pandas
 ta
 xgboost
-yahooquery
+plotly

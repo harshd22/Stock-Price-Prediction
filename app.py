@@ -17,7 +17,7 @@ import plotly.graph_objects as go  # for candlestick chart
 from newsapi import NewsApiClient
 
 # Initialize NewsAPI client
-newsapi = NewsApiClient(api_key="YOUR_NEWS_API_KEY")
+newsapi = NewsApiClient(api_key="7227a18d537b49779ffb88a209d0d0e3")
 
 # Title and sidebar information
 st.title('Stock Price Predictions')

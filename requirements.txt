@@ -3,5 +3,6 @@ pandas
 yfinance
 ta
 plotly
+requests
 scikit-learn
 xgboost

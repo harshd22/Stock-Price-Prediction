@@ -8,16 +8,17 @@ import datetime
 from datetime import date
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Lasso, Ridge
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor, GradientBoostingRegressor, AdaBoostRegressor
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
 from xgboost import XGBRegressor
-from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
+import lightgbm as lgb
+import catboost
+from fbprophet import Prophet
 from sklearn.metrics import r2_score, mean_absolute_error
-import plotly.graph_objects as go  # for candlestick chart
-from newsapi import NewsApiClient
-
-# Initialize NewsAPI client
-newsapi = NewsApiClient(api_key="7227a18d537b49779ffb88a209d0d0e3")
+import plotly.graph_objects as go
 
 # Title and sidebar information
 st.title('Stock Price Predictions')
@@ -46,9 +47,21 @@ def get_stock_info(op):
         st.error(f"Error: {e}")
         return {}
 
+# Function to display dynamic header with stock price and change
+def display_stock_header(stock_data):
+    if not stock_data.empty:
+        current_price = stock_data['Close'].iloc[-1]
+        previous_close = stock_data['Close'].iloc[-2] if len(stock_data) > 1 else current_price
+        price_change = current_price - previous_close
+        percent_change = (price_change / previous_close) * 100 if previous_close != 0 else 0
+        st.markdown(f"### Current Stock Price: **${current_price:.2f}**")
+        st.markdown(f"### Change: **${price_change:.2f}** ({percent_change:.2f}%)")
+    else:
+        st.markdown("### No data available.")
+
 # Main function to handle app logic
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info', 'News', 'Predict'])
+    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info', 'Predict'])
     if option == 'Visualize':
         tech_indicators()
     elif option == 'Recent Data':
@@ -57,8 +70,6 @@ def main():
         candlestick_chart()
     elif option == 'Financial Info':
         financial_info()
-    elif option == 'News':
-        display_news(option)
     else:
         predict()
 
@@ -89,6 +100,7 @@ if st.sidebar.button('Send'):
         interval = interval_map[time_frame]
         data = get_stock_data(option, start_date, end_date, interval=interval)
         info = get_stock_info(option)
+        display_stock_header(data)  # Display header with stock price and change
         if data.empty:
             st.sidebar.error(f'No data found for symbol `{option}` with interval `{interval}`')
         else:
@@ -173,89 +185,113 @@ def candlestick_chart():
 def financial_info():
     st.header('Financial Information')
     if info:
-        market_cap = info.get('marketCap')
-        if market_cap:
-            if market_cap >= 1_000_000_000_000:
-                st.write(f"**Market Capitalization:** {market_cap / 1_000_000_000_000:.2f} Trillion")
-            elif market_cap >= 1_000_000_000:
-                st.write(f"**Market Capitalization:** {market_cap / 1_000_000_000:.2f} Billion")
-            else:
-                st.write(f"**Market Capitalization:** {market_cap / 1_000_000:.2f} Million")
-        else:
-            st.write("**Market Capitalization:** No information provided")
-        
-        st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'No information provided')}")
-        st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'No information provided')}")
-        st.write(f"**Dividend Yield:** {info.get('dividendYield', 'No information provided') * 100:.2f}%")
-        st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'No information provided')}")
-        st.write(f"**Enterprise Value:** {info.get('enterpriseValue', 'No information provided')}")
+        st.write(f"**Market Capitalization:** {format_market_cap(info.get('marketCap', 0))}")
+        st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
+        st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'N/A')}")
+        st.write(f"**Dividend Yield:** {format_dividend_yield(info.get('dividendYield', 'N/A'))}")
+        st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'N/A')}")
+        st.write(f"**Enterprise Value:** {format_market_cap(info.get('enterpriseValue', 0))}")
     else:
         st.write('No financial information available.')
 
-# Display news related to the stock
-def display_news(symbol):
-    st.header(f"Top 10 News for {symbol}")
-    try:
-        news_data = newsapi.get_everything(q=symbol, language='en', sort_by='relevancy')
-        articles = news_data.get('articles', [])
-        
-        if articles:
-            for article in articles[:10]:  # Display only top 10 articles
-                st.write(f"**{article['title']}**")
-                st.write(article['description'])
-                st.write(f"[Read more]({article['url']})")
-                st.write("---")
-        else:
-            st.write("No news articles found for this stock.")
-    
-    except Exception as e:
-        st.error(f"Error fetching news: {e}")
+# Format Market Cap and Dividend Yield
+def format_market_cap(value):
+    if value == 0:
+        return 'No information available'
+    elif value >= 1e12:
+        return f"${value / 1e12:.2f} Trillion"
+    elif value >= 1e9:
+        return f"${value / 1e9:.2f} Billion"
+    elif value >= 1e6:
+        return f"${value / 1e6:.2f} Million"
+    else:
+        return f"${value:.2f}"
+
+def format_dividend_yield(value):
+    if value == 'N/A':
+        return 'No information available'
+    return f"{value * 100:.2f}%"
 
 # Prediction function
 def predict():
     if not data.empty:
-        model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
+        model = st.radio('Choose a model', ['LinearRegression', 'Lasso', 'Ridge', 'RandomForestRegressor', 'ExtraTreesRegressor', 'GradientBoostingRegressor', 'AdaBoostRegressor', 'SVR', 'DecisionTreeRegressor', 'KNeighborsRegressor', 'XGBoostRegressor', 'LightGBM', 'CatBoost', 'Prophet'])
         num = st.number_input('How many days forecast?', value=5)
         num = int(num)
         if st.button('Predict'):
             if model == 'LinearRegression':
                 engine = LinearRegression()
                 model_engine(engine, num)
+            elif model == 'Lasso':
+                engine = Lasso()
+                model_engine(engine, num)
+            elif model == 'Ridge':
+                engine = Ridge()
+                model_engine(engine, num)
             elif model == 'RandomForestRegressor':
-                engine = RandomForestRegressor(n_estimators=100, random_state=0)
+                engine = RandomForestRegressor()
                 model_engine(engine, num)
             elif model == 'ExtraTreesRegressor':
-                engine = ExtraTreesRegressor(n_estimators=100, random_state=0)
+                engine = ExtraTreesRegressor()
+                model_engine(engine, num)
+            elif model == 'GradientBoostingRegressor':
+                engine = GradientBoostingRegressor()
+                model_engine(engine, num)
+            elif model == 'AdaBoostRegressor':
+                engine = AdaBoostRegressor()
+                model_engine(engine, num)
+            elif model == 'SVR':
+                engine = SVR()
+                model_engine(engine, num)
+            elif model == 'DecisionTreeRegressor':
+                engine = DecisionTreeRegressor()
                 model_engine(engine, num)
             elif model == 'KNeighborsRegressor':
-                engine = KNeighborsRegressor(n_neighbors=5)
+                engine = KNeighborsRegressor()
                 model_engine(engine, num)
-            else:
-                engine = XGBRegressor(n_estimators=100, random_state=0)
+            elif model == 'XGBoostRegressor':
+                engine = XGBRegressor()
                 model_engine(engine, num)
+            elif model == 'LightGBM':
+                engine = lgb.LGBMRegressor()
+                model_engine(engine, num)
+            elif model == 'CatBoost':
+                engine = catboost.CatBoostRegressor(silent=True)
+                model_engine(engine, num)
+            elif model == 'Prophet':
+                prophet_forecast(num)
     else:
-        st.write('No data available for prediction.')
+        st.write('No data available to make predictions.')
 
-# Train and predict stock prices
+# Model engine for predictions
 def model_engine(model, num):
-    df = data[['Close']].copy()
-    df['Prediction'] = df['Close'].shift(-num)
-    X = df.drop(['Prediction'], axis=1)[:-num]
-    y = df['Prediction'][:-num]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    score = r2_score(y_test, y_pred)
-    mae = mean_absolute_error(y_test, y_pred)
-    st.write(f'R2 score: {score}')
-    st.write(f'Mean Absolute Error: {mae}')
-    x_forecast = df.drop(['Prediction'], axis=1)[-num:]
-    x_forecast = scaler.transform(x_forecast)
-    forecast = model.predict(x_forecast)
-    st.write(f'Next {num} days forecast:')
-    st.write(forecast)
+    df = data[['Close']]
+    df['preds'] = data.Close.shift(-num)
+    x = df.drop(['preds'], axis=1).values
+    x = scaler.fit_transform(x)
+    x_forecast = x[-num:]
+    x = x[:-num]
+    y = df.preds.values
+    y = y[:-num]
 
-if __name__ == "__main__":
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=7)
+    model.fit(x_train, y_train)
+    preds = model.predict(x_test)
+    st.text(f'r2_score: {r2_score(y_test, preds)} \nMAE: {mean_absolute_error(y_test, preds)}')
+    forecast_pred = model.predict(x_forecast)
+    day = 1
+    for i in forecast_pred:
+        st.text(f'Day {day}: {i}')
+        day += 1
+
+# Prophet forecasting function
+def prophet_forecast(num):
+    df_prophet = data.reset_index()[['Date', 'Close']].rename(columns={'Date': 'ds', 'Close': 'y'})
+    model = Prophet()
+    model.fit(df_prophet)
+    future = model.make_future_dataframe(periods=num)
+    forecast = model.predict(future)
+    st.write(forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(num))
+
+if __name__ == '__main__':
     main()

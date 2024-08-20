@@ -172,13 +172,13 @@ def financial_info():
             if value is None:
                 return 'N/A'
             if value >= 1e12:
-                return f"${value / 1e12:.2f} Trillion"
+                return f"{value / 1e12:.2f} Trillion"
             elif value >= 1e9:
-                return f"${value / 1e9:.2f} Billion"
+                return f"{value / 1e9:.2f} Billion"
             elif value >= 1e6:
-                return f"${value / 1e6:.2f} Million"
+                return f"{value / 1e6:.2f} Million"
             else:
-                return f"${value:.2f}"
+                return f"{value:.2f}"
 
         st.write(f"**Market Capitalization:** {format_value(info.get('marketCap', None))}")
         st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
@@ -233,21 +233,4 @@ def model_engine(model, num):
     x = x[:-num]
     # getting the preds column
     y = df.preds.values
-    # selecting the required values for training
-    y = y[:-num]
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=0)
-    model.fit(x_train, y_train)
-    y_pred = model.predict(x_test)
-    r2 = r2_score(y_test, y_pred)
-    mae = mean_absolute_error(y_test, y_pred)
-    st.write(f"**R-squared Score:** {r2:.2f}")
-    st.write(f"**Mean Absolute Error:** {mae:.2f}")
-    # making predictions
-    forecast = model.predict(x_forecast)
-    forecast_dates = [data.index[-1] + datetime.timedelta(days=i) for i in range(1, num + 1)]
-    forecast_df = pd.DataFrame(data={'Date': forecast_dates, 'Forecast': forecast})
-    st.write(forecast_df)
-
-# Run the app
-if __name__ == "__main__":
-    main()
+    # selecting the

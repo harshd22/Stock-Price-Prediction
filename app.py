@@ -33,8 +33,8 @@ def main():
         predict()
 
 @st.cache_resource
-def download_data(op, start_date, end_date):
-    df = yf.download(op, start=start_date, end=end_date, progress=False)
+def download_data(op, start_date, end_date, interval='1d'):
+    df = yf.download(op, start=start_date, end=end_date, interval=interval, progress=False)
     return df
 
 # Sidebar input fields
@@ -46,11 +46,14 @@ before = today - datetime.timedelta(days=duration)
 start_date = st.sidebar.date_input('Start Date', value=before)
 end_date = st.sidebar.date_input('End date', today)
 
+# Dropdown for candlestick time frame
+time_frame = st.sidebar.selectbox('Select Candlestick Time Frame', ['1m', '5m', '15m', '30m', '60m', '1d'])
+
 # Download data based on inputs
 if st.sidebar.button('Send'):
     if start_date < end_date:
         st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
-        data = download_data(option, start_date, end_date)
+        data = download_data(option, start_date, end_date, interval=time_frame)
         if data.empty:
             st.sidebar.error(f'No data found for symbol `{option}`')
         else:
@@ -59,7 +62,7 @@ if st.sidebar.button('Send'):
         st.sidebar.error('Error: End date must fall after start date')
 
 # Download the data globally for access in different functions
-data = download_data(option, start_date, end_date)
+data = download_data(option, start_date, end_date, interval=time_frame)
 scaler = StandardScaler()
 
 # Technical indicators visualization
@@ -122,7 +125,7 @@ def candlestick_chart():
                                              high=data['High'],
                                              low=data['Low'],
                                              close=data['Close'])])
-        fig.update_layout(title=f'Candlestick chart for {option}',
+        fig.update_layout(title=f'Candlestick chart for {option} ({time_frame})',
                           xaxis_title='Date',
                           yaxis_title='Price',
                           xaxis_rangeslider_visible=False)

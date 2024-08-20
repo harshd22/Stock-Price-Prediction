@@ -1,7 +1,10 @@
 streamlit
-yfinance
 pandas
-plotly
+yfinance
+ta
 scikit-learn
 xgboost
-ta
+lightgbm
+catboost
+fbprophet
+plotly

@@ -4,5 +4,4 @@ pandas
 plotly
 scikit-learn
 xgboost
-newsapi-python
 ta

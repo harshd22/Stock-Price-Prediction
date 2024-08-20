@@ -41,7 +41,7 @@ def get_stock_info(op):
         return info, earnings
     except Exception as e:
         st.error(f"Error: {e}")
-        return {}, {}
+        return {}, None
 
 # Main function to handle app logic
 def main():
@@ -177,38 +177,34 @@ def financial_info():
     else:
         st.write('No financial information available.')
 
-    if not earnings.empty:
+    if earnings is not None and not earnings.empty:
         st.write('**Upcoming Earnings Dates:**')
         st.write(earnings)
     else:
         st.write('No earnings data available.')
 
-# Prediction function
+# Predict stock price
 def predict():
-    if not data.empty:
-        model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
-        num = st.number_input('How many days forecast?', value=5)
-        num = int(num)
-        if st.button('Predict'):
-            if model == 'LinearRegression':
-                engine = LinearRegression()
-                model_engine(engine, num)
-            elif model == 'RandomForestRegressor':
-                engine = RandomForestRegressor()
-                model_engine(engine, num)
-            elif model == 'ExtraTreesRegressor':
-                engine = ExtraTreesRegressor()
-                model_engine(engine, num)
-            elif model == 'KNeighborsRegressor':
-                engine = KNeighborsRegressor()
-                model_engine(engine, num)
-            else:
-                engine = XGBRegressor()
-                model_engine(engine, num)
-    else:
-        st.write('No data available to make predictions.')
+    model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
+    num = st.number_input('How many days forecast?', value=5)
+    num = int(num)
+    if st.button('Predict'):
+        if model == 'LinearRegression':
+            engine = LinearRegression()
+            model_engine(engine, num)
+        elif model == 'RandomForestRegressor':
+            engine = RandomForestRegressor()
+            model_engine(engine, num)
+        elif model == 'ExtraTreesRegressor':
+            engine = ExtraTreesRegressor()
+            model_engine(engine, num)
+        elif model == 'KNeighborsRegressor':
+            engine = KNeighborsRegressor()
+            model_engine(engine, num)
+        else:
+            engine = XGBRegressor()
+            model_engine(engine, num)
 
-# Model engine for predictions
 def model_engine(model, num):
     # getting only the closing price
     df = data[['Close']]

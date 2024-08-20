@@ -13,10 +13,18 @@ from sklearn.neighbors import KNeighborsRegressor
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
-import plotly.graph_objects as go  # for candlestick chart
+import plotly.graph_objects as go
+from newsapi import NewsApiClient
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import nltk
+
+nltk.download('vader_lexicon')
+
+# Initialize News API (replace 'YOUR_NEWSAPI_KEY' with your actual API key)
+newsapi = NewsApiClient(api_key='YOUR_NEWSAPI_KEY')
 
 # Title and sidebar information
-st.title('Stock Price Predictions')
+st.title('Stock Price Predictions with News and Sentiment Analysis')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
 st.sidebar.info("Created and designed by [Harsh Dugad](www.linkedin.com/in/harsh-dugad-90067923b)")
 
@@ -42,9 +50,25 @@ def get_stock_info(op):
         st.error(f"Error: {e}")
         return {}
 
+# Function to fetch news articles
+@st.cache_resource
+def fetch_news(stock_symbol):
+    try:
+        news = newsapi.get_everything(q=stock_symbol, language='en', sort_by='relevancy', page_size=5)
+        return news['articles']
+    except Exception as e:
+        st.error(f"Error fetching news: {e}")
+        return []
+
+# Function to analyze sentiment
+def analyze_sentiment(text):
+    analyzer = SentimentIntensityAnalyzer()
+    sentiment = analyzer.polarity_scores(text)
+    return sentiment['compound']  # Return compound sentiment score
+
 # Main function to handle app logic
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info', 'Predict'])
+    option = st.sidebar.selectbox('Make a choice', ['Visualize', 'Recent Data', 'Candlestick', 'Financial Info', 'Predict', 'News & Sentiment'])
     if option == 'Visualize':
         tech_indicators()
     elif option == 'Recent Data':
@@ -53,6 +77,8 @@ def main():
         candlestick_chart()
     elif option == 'Financial Info':
         financial_info()
+    elif option == 'News & Sentiment':
+        news_sentiment_analysis()
     else:
         predict()
 
@@ -167,90 +193,59 @@ def candlestick_chart():
 def financial_info():
     st.header('Financial Information')
     if info:
-        # Function to format large numbers
-        def format_value(value):
-            if value is None:
-                return 'N/A'
-            if value >= 1e12:
-                return f"{value / 1e12:.2f} Trillion"
-            elif value >= 1e9:
-                return f"{value / 1e9:.2f} Billion"
-            elif value >= 1e6:
-                return f"{value / 1e6:.2f} Million"
+        market_cap = info.get('marketCap', None)
+        if market_cap:
+            if market_cap >= 1e12:
+                market_cap_str = f'{market_cap / 1e12:.2f} Trillion'
+            elif market_cap >= 1e9:
+                market_cap_str = f'{market_cap / 1e9:.2f} Billion'
+            elif market_cap >= 1e6:
+                market_cap_str = f'{market_cap / 1e6:.2f} Million'
             else:
-                return f"{value:.2f}"
-
-        st.write(f"**Market Capitalization:** {format_value(info.get('marketCap', None))}")
-        st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
-        st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'N/A')}")
-        dividend_yield = info.get('dividendYield', None)
-        if dividend_yield is not None:
-            st.write(f"**Dividend Yield:** {dividend_yield * 100:.2f}%")
+                market_cap_str = f'{market_cap:,}'
         else:
-            st.write("**Dividend Yield:** No information available")
-        st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'N/A')}")
-        st.write(f"**Enterprise Value:** {format_value(info.get('enterpriseValue', None))}")
+            market_cap_str = 'No information provided'
+
+        st.write(f"**Market Capitalization:** {market_cap_str}")
+        st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'No information provided')}")
+        st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'No information provided')}")
+        st.write(f"**Dividend Yield:** {info.get('dividendYield', 'No information provided')}")
+        st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'No information provided')}")
+        st.write(f"**Enterprise Value:** {info.get('enterpriseValue', 'No information provided')}")
     else:
         st.write('No financial information available.')
 
-# Prediction function
-def predict():
-    if not data.empty:
-        model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
-        num = st.number_input('How many days forecast?', value=5)
-        num = int(num)
-        if st.button('Predict'):
-            if model == 'LinearRegression':
-                engine = LinearRegression()
-                model_engine(engine, num)
-            elif model == 'RandomForestRegressor':
-                engine = RandomForestRegressor()
-                model_engine(engine, num)
-            elif model == 'ExtraTreesRegressor':
-                engine = ExtraTreesRegressor()
-                model_engine(engine, num)
-            elif model == 'KNeighborsRegressor':
-                engine = KNeighborsRegressor()
-                model_engine(engine, num)
+# News and Sentiment Analysis
+def news_sentiment_analysis():
+    st.header('News and Sentiment Analysis')
+    news = fetch_news(option)
+    if news:
+        analyzer = SentimentIntensityAnalyzer()
+        for article in news:
+            title = article['title']
+            description = article['description']
+            url = article['url']
+            st.subheader(title)
+            st.write(description)
+            st.write(f"[Read more]({url})")
+
+            # Sentiment analysis
+            sentiment_score = analyze_sentiment(description)
+            if sentiment_score > 0.05:
+                sentiment = 'Positive'
+            elif sentiment_score < -0.05:
+                sentiment = 'Negative'
             else:
-                engine = XGBRegressor()
-                model_engine(engine, num)
+                sentiment = 'Neutral'
+            st.write(f"Sentiment: **{sentiment}** (Score: {sentiment_score:.2f})")
+            st.write("---")
     else:
-        st.write('No data available to make predictions.')
+        st.write("No news available.")
 
-# Model engine for predictions
-def model_engine(model, num):
-    # getting only the closing price
-    df = data[['Close']]
-    # shifting the closing price based on number of days forecast
-    df['preds'] = data.Close.shift(-num)
-    # scaling the data
-    x = df.drop(['preds'], axis=1).values
-    x = scaler.fit_transform(x)
-    # storing the last num_days data
-    x_forecast = x[-num:]
-    # selecting the required values for training
-    x = x[:-num]
-    # getting the preds column
-    y = df.preds.values
-    # selecting the required values for training
-    y = y[:-num]
+# Prediction function placeholder (You can add your own model predictions here)
+def predict():
+    st.header('Prediction')
+    st.write('Prediction logic here.')
 
-    # Splitting the data
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=0)
-    # Training the model
-    model.fit(x_train, y_train)
-    y_pred = model.predict(x_test)
-    r2 = r2_score(y_test, y_pred)
-    mae = mean_absolute_error(y_test, y_pred)
-    st.write(f"**R-squared Score:** {r2:.2f}")
-    st.write(f"**Mean Absolute Error:** {mae:.2f}")
-    # making predictions
-    forecast = model.predict(x_forecast)
-    forecast_dates = [data.index[-1] + datetime.timedelta(days=i) for i in range(1, num + 1)]
-    forecast_df = pd.DataFrame(data={'Date': forecast_dates, 'Forecast': forecast})
-    st.write(forecast_df)
-
-# Run the app
 if __name__ == "__main__":
     main()

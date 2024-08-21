@@ -18,7 +18,7 @@ import plotly.graph_objects as go  # for candlestick chart
 # Title and sidebar information
 st.title('Stock Price Predictions')
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by [Harsh Dugad](www.linkedin.com/in/harsh-dugad-90067923b)")
+st.sidebar.info("Created and designed by [Harsh Dugad](https://www.linkedin.com/in/harsh-dugad-90067923b/)")
 
 # Function to get stock data and financials
 @st.cache_resource

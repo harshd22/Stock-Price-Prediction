@@ -102,27 +102,34 @@ def tech_indicators():
         option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
 
         # Bollinger bands
-        bb_indicator = BollingerBands(data.Close)
+        bb_indicator = BollingerBands(data['Close'])
         bb = data.copy()
         bb['bb_h'] = bb_indicator.bollinger_hband()
         bb['bb_l'] = bb_indicator.bollinger_lband()
         bb = bb[['Close', 'bb_h', 'bb_l']]
 
         # MACD
-        macd = MACD(data.Close).macd()
+        macd_indicator = MACD(data['Close'])
+        macd = macd_indicator.macd()
+
         # RSI
-        rsi = RSIIndicator(data.Close).rsi()
+        rsi_indicator = RSIIndicator(data['Close'])
+        rsi = rsi_indicator.rsi()
+
         # SMA
-        sma = SMAIndicator(data.Close, window=14).sma_indicator()
+        sma_indicator = SMAIndicator(data['Close'], window=14)
+        sma = sma_indicator.sma_indicator()
+
         # EMA
-        ema = EMAIndicator(data.Close).ema_indicator()
+        ema_indicator = EMAIndicator(data['Close'])
+        ema = ema_indicator.ema_indicator()
 
         if option == 'Close':
             st.write('Close Price')
-            st.line_chart(data.Close)
+            st.line_chart(data['Close'])
         elif option == 'BB':
             st.write('BollingerBands')
-            st.line_chart(bb)
+            st.line_chart(bb[['Close', 'bb_h', 'bb_l']])
         elif option == 'MACD':
             st.write('Moving Average Convergence Divergence')
             st.line_chart(macd)

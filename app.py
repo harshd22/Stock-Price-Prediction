@@ -102,11 +102,15 @@ def tech_indicators():
         option = st.radio('Choose a Technical Indicator to Visualize', ['Close', 'BB', 'MACD', 'RSI', 'SMA', 'EMA'])
 
         # Bollinger bands
-        bb_indicator = BollingerBands(data['Close'])
-        bb = data.copy()
-        bb['bb_h'] = bb_indicator.bollinger_hband()
-        bb['bb_l'] = bb_indicator.bollinger_lband()
-        bb = bb[['Close', 'bb_h', 'bb_l']]
+        try:
+            bb_indicator = BollingerBands(data['Close'])
+            bb = data.copy()
+            bb['bb_h'] = bb_indicator.bollinger_hband()
+            bb['bb_l'] = bb_indicator.bollinger_lband()
+            bb = bb[['Close', 'bb_h', 'bb_l']]
+        except Exception as e:
+            st.error(f"Error calculating Bollinger Bands: {e}")
+            bb = pd.DataFrame()
 
         # MACD
         macd_indicator = MACD(data['Close'])
@@ -128,8 +132,11 @@ def tech_indicators():
             st.write('Close Price')
             st.line_chart(data['Close'])
         elif option == 'BB':
-            st.write('BollingerBands')
-            st.line_chart(bb[['Close', 'bb_h', 'bb_l']])
+            if not bb.empty:
+                st.write('BollingerBands')
+                st.line_chart(bb[['Close', 'bb_h', 'bb_l']])
+            else:
+                st.write("No data available for Bollinger Bands.")
         elif option == 'MACD':
             st.write('Moving Average Convergence Divergence')
             st.line_chart(macd)

@@ -12,7 +12,6 @@ from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 import requests
 import random
-import google.generativeai as genai
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Stock Price Prediction & Insights", layout="wide")
@@ -485,127 +484,6 @@ def stock_comparison():
     else:
         st.write('Enter two different stock tickers to compare (same sector).')
 
-# --- Gemini Chatbot Floating Button ---
-CHATBOT_API_KEY = "AIzaSyAuHfpiINkJ4zm9h4L8StqwHJvC40EX7lg"
-
-def gemini_chatbot_fab():
-    # Floating button CSS
-    st.markdown('''
-        <style>
-        #chatbot-fab {
-            position: fixed;
-            bottom: 32px;
-            right: 32px;
-            z-index: 9999;
-        }
-        #chatbot-fab img {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            cursor: pointer;
-            background: #fff;
-            border: 2px solid #1a73e8;
-        }
-        </style>
-        <div id="chatbot-fab">
-            <img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" onclick="window.dispatchEvent(new Event('openGeminiChat'))" title="Chat with Gemini AI" />
-        </div>
-        <script>
-        window.addEventListener('openGeminiChat', function() {
-            var el = window.parent.document.querySelector('details[open]');
-            if (el) el.removeAttribute('open');
-            var chatExpander = window.parent.document.querySelector('details[data-testid="stExpander"]');
-            if (chatExpander) chatExpander.setAttribute('open', 'true');
-        });
-        </script>
-    ''', unsafe_allow_html=True)
-    # Expander for chatbot
-    with st.expander("💬 Gemini Chatbot", expanded=False):
-        gemini_chatbot_section()
-
-# --- Gemini Chatbot Section ---
-def gemini_chatbot_section():
-    genai.configure(api_key=CHATBOT_API_KEY)
-    if "gemini_chat_history" not in st.session_state:
-        st.session_state["gemini_chat_history"] = []
-    for msg in st.session_state["gemini_chat_history"]:
-        st.chat_message(msg["role"]).write(msg["content"])
-    user_input = st.chat_input("Ask Gemini anything about stocks, finance, or the market!")
-    if user_input:
-        st.session_state["gemini_chat_history"].append({"role": "user", "content": user_input})
-        with st.spinner("Gemini is thinking..."):
-            model = genai.GenerativeModel("gemini-pro")
-            convo = model.start_chat(history=[
-                {"role": m["role"], "parts": [m["content"]]} for m in st.session_state["gemini_chat_history"]
-            ])
-            response = convo.send_message(user_input)
-            answer = response.text
-        st.session_state["gemini_chat_history"].append({"role": "assistant", "content": answer})
-        st.chat_message("assistant").write(answer)
-
-# --- Llama 2 Chatbot Floating Button ---
-def llama2_chatbot_fab():
-    # Floating button CSS
-    st.markdown('''
-        <style>
-        #llama2-fab {
-            position: fixed;
-            bottom: 32px;
-            right: 100px;
-            z-index: 9999;
-        }
-        #llama2-fab img {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            cursor: pointer;
-            background: #fff;
-            border: 2px solid #1a73e8;
-        }
-        </style>
-        <div id="llama2-fab">
-            <img src="https://cdn-icons-png.flaticon.com/512/1048/1048953.png" onclick="window.dispatchEvent(new Event('openLlama2Chat'))" title="Chat with Llama 2 AI" />
-        </div>
-        <script>
-        window.addEventListener('openLlama2Chat', function() {
-            var el = window.parent.document.querySelector('details[open]');
-            if (el) el.removeAttribute('open');
-            var chatExpander = window.parent.document.querySelector('details[data-testid="stExpander"]');
-            if (chatExpander) chatExpander.setAttribute('open', 'true');
-        });
-        </script>
-    ''', unsafe_allow_html=True)
-    # Expander for chatbot
-    with st.expander("🦙 Llama 2 Chatbot", expanded=False):
-        llama2_chatbot_section()
-
-# --- Llama 2 Chatbot Section ---
-def llama2_chatbot_section():
-    if "llama2_chat_history" not in st.session_state:
-        st.session_state["llama2_chat_history"] = []
-    for msg in st.session_state["llama2_chat_history"]:
-        st.chat_message(msg["role"]).write(msg["content"])
-    user_input = st.chat_input("Ask Llama 2 anything (demo, free, limited):")
-    if user_input:
-        st.session_state["llama2_chat_history"].append({"role": "user", "content": user_input})
-        with st.spinner("Llama 2 is thinking..."):
-            API_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf"
-            # Optionally, add your Hugging Face token below for higher rate limits
-            headers = {"Authorization": "Bearer hf_xxx"} if False else {}
-            payload = {
-                "inputs": f"[INST] {user_input} [/INST]",
-                "parameters": {"max_new_tokens": 128, "temperature": 0.7}
-            }
-            response = requests.post(API_URL, headers=headers, json=payload)
-            if response.status_code == 200 and isinstance(response.json(), list):
-                answer = response.json()[0].get("generated_text", "Sorry, no answer.")
-            else:
-                answer = "Sorry, the free Llama 2 chatbot is currently unavailable."
-        st.session_state["llama2_chat_history"].append({"role": "assistant", "content": answer})
-        st.chat_message("assistant").write(answer)
-
 # --- Main App Logic ---
 option_menu = [
     'Home', 'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Stock Screener', 'Stock Comparison', 'Financial Info', 'News', 'Predict'
@@ -630,7 +508,5 @@ elif selected == 'News':
 else:
     predict()
 
-gemini_chatbot_fab()
-llama2_chatbot_fab()
 st.markdown("---")
 st.markdown("<div style='text-align:center; color:gray;'>Made with ❤️ by Harsh Dugad</div>", unsafe_allow_html=True) 

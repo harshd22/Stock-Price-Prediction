@@ -101,8 +101,10 @@ def predict_prices(df, forecast_days, model):
     last_X = df[features].values[-forecast_days:]
     last_X_scaled = scaler.transform(last_X)
     forecast = model.predict(last_X_scaled)
-    # Ensure forecast is 1D
+    # Ensure forecast is always 1D
     forecast = forecast.squeeze()
+    if forecast.ndim > 1:
+        forecast = forecast.ravel()
     last_date = df.index[-1]
     forecast_dates = [last_date + datetime.timedelta(days=i+1) for i in range(forecast_days)]
     forecast_df = pd.DataFrame({"Date": forecast_dates, "Forecast": forecast})
@@ -123,8 +125,12 @@ if run:
             st.subheader(f"Latest Trading Signal: :blue[{latest_signal}]")
             if show_tech:
                 st.subheader("Technical Indicators")
-                st.line_chart(df_feat[["Close", "SMA_14", "EMA_14"]])
-                st.line_chart(df_feat[["RSI_14", "MACD"]])
+                # Always pass 1D Series to line_chart
+                st.line_chart(df_feat["Close"])
+                st.line_chart(df_feat["SMA_14"])
+                st.line_chart(df_feat["EMA_14"])
+                st.line_chart(df_feat["RSI_14"])
+                st.line_chart(df_feat["MACD"])
             if show_candle:
                 st.subheader("Candlestick Chart")
                 fig = go.Figure(data=[go.Candlestick(
@@ -147,8 +153,8 @@ if run:
             )
             st.write("**Forecasted Prices and Signals:**")
             st.dataframe(forecast_df)
-            # Ensure 1D for line_chart
-            st.line_chart(pd.Series(forecast_df["Forecast"].values, index=forecast_df["Date"]))
+            # Always pass 1D Series to line_chart for forecast
+            st.line_chart(pd.Series(forecast_df["Forecast"].values.squeeze(), index=forecast_df["Date"]))
             st.write("**Forecasted Signals:**")
             st.dataframe(forecast_df[["Date", "Signal"]])
     except Exception as e:

@@ -10,7 +10,6 @@ from sklearn.neighbors import KNeighborsRegressor
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
-import math
 import requests
 
 # --- Streamlit UI ---
@@ -21,13 +20,27 @@ st.markdown("""
     .block-container {padding-top: 2rem;}
     .stButton>button {background-color: #1a73e8; color: white;}
     .stDataFrame {background-color: #23272f;}
+    .ticker {
+        background: #23272f;
+        color: #fff;
+        padding: 0.5em 1em;
+        font-size: 1.1em;
+        border-radius: 8px;
+        margin-bottom: 1em;
+        overflow-x: auto;
+        white-space: nowrap;
+        animation: ticker 20s linear infinite;
+    }
+    @keyframes ticker {
+        0% { transform: translateX(100%); }
+        100% { transform: translateX(-100%); }
+    }
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown("<h1 style='color:#1a73e8;'>📈 Dynamic Stock Price Prediction & Financial Insights</h1>", unsafe_allow_html=True)
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
 st.sidebar.info("Created and designed by Harsh Dugad")
-st.sidebar.markdown("<a href='https://www.linkedin.com/in/harsh-dugad-90067923b/' target='_blank'>LinkedIn Profile</a>", unsafe_allow_html=True)
 
 # --- Data Fetching Functions ---
 @st.cache_resource
@@ -67,6 +80,44 @@ def get_newsapi_news(query):
         return articles[:5]  # Top 5 news
     else:
         return []
+
+# --- Home Screen: Top Gainers & Losers ---
+def get_top_movers():
+    # Use a set of popular tickers for demo; for real use, fetch from a screener API
+    tickers = [
+        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX', 'AMD', 'INTC',
+        'BA', 'JPM', 'WMT', 'DIS', 'NKE', 'V', 'MA', 'PYPL', 'ADBE', 'CRM', 'CSCO', 'QCOM', 'ORCL', 'PEP', 'KO'
+    ]
+    data = yf.download(tickers, period='2d', interval='1d', group_by='ticker', progress=False)
+    movers = []
+    for t in tickers:
+        try:
+            close = data[t]['Close']
+            if len(close) < 2:
+                continue
+            change = (close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100
+            movers.append({'symbol': t, 'change': change, 'last': close.iloc[-1]})
+        except Exception:
+            continue
+    movers = sorted(movers, key=lambda x: x['change'], reverse=True)
+    gainers = movers[:5]
+    losers = movers[-5:][::-1]
+    return gainers, losers
+
+def home_screen():
+    st.markdown("---")
+    st.markdown("<h2 style='color:#1a73e8;'>🏠 Home</h2>", unsafe_allow_html=True)
+    st.markdown("<h4>Welcome to the Dynamic Stock Price Prediction & Financial Insights Platform!</h4>", unsafe_allow_html=True)
+    st.write("Explore top gainers and losers, get predictions, news, and more.")
+    gainers, losers = get_top_movers()
+    st.markdown("<h5 style='color:green;'>Top Gainers</h5>", unsafe_allow_html=True)
+    gainer_ticker = " | ".join([f"<b>{g['symbol']}</b> ({g['change']:+.2f}%)" for g in gainers])
+    st.markdown(f"<div class='ticker'>{gainer_ticker}</div>", unsafe_allow_html=True)
+    st.markdown("<h5 style='color:red;'>Top Losers</h5>", unsafe_allow_html=True)
+    loser_ticker = " | ".join([f"<b>{l['symbol']}</b> ({l['change']:+.2f}%)" for l in losers])
+    st.markdown(f"<div class='ticker'>{loser_ticker}</div>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown("<h4>🔍 Use the sidebar to search for a stock and explore predictions, news, and more!</h4>", unsafe_allow_html=True)
 
 # --- Sidebar Inputs ---
 option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
@@ -133,39 +184,6 @@ def buy_sell_recommendation():
             st.info('Recommendation: HOLD 🤝')
     else:
         st.write('Not enough data for recommendation.')
-
-def volatility_meter():
-    st.markdown("---")
-    st.markdown("<h3 style='color:#1a73e8;'>🌪️ Volatility Meter (Last 30 Days)</h3>", unsafe_allow_html=True)
-    if not data.empty and len(data) > 30:
-        returns = data['Close'].pct_change().dropna()
-        vol = returns[-30:].std() * 100
-        if math.isnan(vol):
-            st.info("Volatility could not be calculated (not enough price movement or data).")
-        else:
-            st.metric("Volatility (std dev of daily returns)", f"{vol:.2f}%")
-            if vol > 3:
-                st.warning("High volatility!")
-            elif vol > 1.5:
-                st.info("Moderate volatility.")
-            else:
-                st.success("Low volatility.")
-    else:
-        st.write('Not enough data for volatility analysis.')
-
-def best_worst_day():
-    st.markdown("---")
-    st.markdown("<h3 style='color:#1a73e8;'>🏆 Best & Worst Day (Close Price Change)</h3>", unsafe_allow_html=True)
-    if not data.empty and len(data) > 1:
-        returns = data['Close'].pct_change().dropna()
-        best = returns.idxmax()
-        worst = returns.idxmin()
-        best_str = str(best.date()) if hasattr(best, 'date') else str(best)
-        worst_str = str(worst.date()) if hasattr(worst, 'date') else str(worst)
-        st.markdown(f"Best day: <b>{best_str}</b> ({returns.max()*100:.2f}%)", unsafe_allow_html=True)
-        st.markdown(f"Worst day: <b>{worst_str}</b> ({returns.min()*100:.2f}%)", unsafe_allow_html=True)
-    else:
-        st.write('Not enough data for best/worst day analysis.')
 
 def financial_info():
     st.markdown("---")
@@ -256,19 +274,17 @@ def model_engine(model, num):
 
 # --- Main App Logic ---
 option_menu = [
-    'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Volatility Meter', 'Best/Worst Day', 'Financial Info', 'News', 'Predict'
+    'Home', 'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Financial Info', 'News', 'Predict'
 ]
 selected = st.sidebar.selectbox('Choose Section', option_menu)
-if selected == 'Recent Data':
+if selected == 'Home':
+    home_screen()
+elif selected == 'Recent Data':
     dataframe()
 elif selected == 'Line Chart':
     line_chart()
 elif selected == 'Buy/Sell Recommendation':
     buy_sell_recommendation()
-elif selected == 'Volatility Meter':
-    volatility_meter()
-elif selected == 'Best/Worst Day':
-    best_worst_day()
 elif selected == 'Financial Info':
     financial_info()
 elif selected == 'News':
@@ -277,4 +293,4 @@ else:
     predict()
 
 st.markdown("---")
-st.markdown("<div style='text-align:center; color:gray;'>Made with ❤️ by <a href='https://www.linkedin.com/in/harsh-dugad-90067923b/' target='_blank'>Harsh Dugad</a></div>", unsafe_allow_html=True) 
+st.markdown("<div style='text-align:center; color:gray;'>Made with ❤️ by Harsh Dugad</div>", unsafe_allow_html=True) 

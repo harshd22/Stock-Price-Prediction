@@ -90,22 +90,28 @@ if run:
             st.line_chart(df["Close"])
             if show_candle:
                 st.subheader("Candlestick Chart")
-                fig = go.Figure(data=[go.Candlestick(
-                    x=df.index,
-                    open=df["Open"],
-                    high=df["High"],
-                    low=df["Low"],
-                    close=df["Close"]
-                )])
-                st.plotly_chart(fig, use_container_width=True)
+                # Check for required columns and non-empty data
+                required_cols = ["Open", "High", "Low", "Close"]
+                if all(col in df.columns for col in required_cols) and not df[required_cols].isnull().any().any() and not df[required_cols].empty:
+                    fig = go.Figure(data=[go.Candlestick(
+                        x=df.index,
+                        open=df["Open"],
+                        high=df["High"],
+                        low=df["Low"],
+                        close=df["Close"]
+                    )])
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Candlestick chart data is missing or incomplete.")
             st.subheader("Model Training & Prediction")
             model = get_model(model_name)
             r2, mae, forecast_df = predict_prices(df, forecast_days, model)
             st.write(f"**R² Score:** {r2:.3f}")
             st.write(f"**Mean Absolute Error:** {mae:.3f}")
             last_close = df["Close"].iloc[-1]
+            # Fix ambiguous Series error by using numpy/scalar comparison
             forecast_df["Signal"] = forecast_df["Forecast"].apply(
-                lambda x: "Buy" if x > last_close * 1.01 else ("Sell" if x < last_close * 0.99 else "Hold")
+                lambda x: "Buy" if x > (last_close * 1.01) else ("Sell" if x < (last_close * 0.99) else "Hold")
             )
             st.write("**Forecasted Prices and Signals:**")
             st.dataframe(forecast_df)

@@ -150,6 +150,22 @@ def home_screen():
     st.markdown("<h4>Welcome to the Dynamic Stock Price Prediction & Financial Insights Platform!</h4>", unsafe_allow_html=True)
     st.write("Explore market overview, trending stocks, news, and more.")
 
+    # --- Dashboard Navigation Buttons ---
+    st.markdown("<h5 style='color:#1a73e8;'>🚀 Quick Access</h5>", unsafe_allow_html=True)
+    nav_cols = st.columns(3)
+    with nav_cols[0]:
+        if st.button('🔎 Stock Screener', key='nav_screener'):
+            st.session_state['nav_section'] = 'Stock Screener'
+            st.experimental_rerun()
+    with nav_cols[1]:
+        if st.button('📊 Stock Comparison', key='nav_comparison'):
+            st.session_state['nav_section'] = 'Stock Comparison'
+            st.experimental_rerun()
+    with nav_cols[2]:
+        if st.button('📰 News', key='nav_news'):
+            st.session_state['nav_section'] = 'News'
+            st.experimental_rerun()
+
     # Market Overview Cards (unchanged)
     indices = {
         'S&P 500': '^GSPC',
@@ -488,7 +504,14 @@ def stock_comparison():
 option_menu = [
     'Home', 'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Stock Screener', 'Stock Comparison', 'Financial Info', 'News', 'Predict'
 ]
-selected = st.sidebar.selectbox('Choose Section', option_menu)
+# Use session state for navigation from home screen buttons
+if 'nav_section' in st.session_state:
+    selected = st.session_state['nav_section']
+    # Reset after use so sidebar can take over
+    del st.session_state['nav_section']
+else:
+    selected = st.sidebar.selectbox('Choose Section', option_menu)
+
 if selected == 'Home':
     home_screen()
 elif selected == 'Recent Data':

@@ -389,52 +389,44 @@ def model_engine(model, num):
 def stock_screener():
     st.markdown("---")
     st.markdown("<h2 style='color:#1a73e8;'>🔎 Stock Screener</h2>", unsafe_allow_html=True)
-    # Static demo data for screener
-    screener_data = pd.DataFrame([
-        {'Symbol': 'AAPL', 'Name': 'Apple', 'Sector': 'Technology', 'Price': 190.0},
-        {'Symbol': 'TSLA', 'Name': 'Tesla', 'Sector': 'Automotive', 'Price': 250.0},
-        {'Symbol': 'RELIANCE.NS', 'Name': 'Reliance', 'Sector': 'Energy', 'Price': 2800.0},
-        {'Symbol': 'TCS.NS', 'Name': 'TCS', 'Sector': 'Technology', 'Price': 3700.0},
-        {'Symbol': 'HDFCBANK.NS', 'Name': 'HDFC Bank', 'Sector': 'Banking', 'Price': 1700.0},
-        {'Symbol': 'INFY.NS', 'Name': 'Infosys', 'Sector': 'Technology', 'Price': 1500.0},
-        {'Symbol': 'ICICIBANK.NS', 'Name': 'ICICI Bank', 'Sector': 'Banking', 'Price': 1100.0},
-        {'Symbol': 'ITC.NS', 'Name': 'ITC', 'Sector': 'FMCG', 'Price': 450.0},
-        {'Symbol': 'SBIN.NS', 'Name': 'SBI', 'Sector': 'Banking', 'Price': 600.0},
-        {'Symbol': 'LT.NS', 'Name': 'L&T', 'Sector': 'Infrastructure', 'Price': 3500.0},
-    ])
-    sector = st.selectbox('Select Sector', ['All'] + sorted(screener_data['Sector'].unique()))
-    min_price, max_price = st.slider('Price Range', 0, 4000, (0, 4000))
-    filtered = screener_data.copy()
-    if sector != 'All':
-        filtered = filtered[filtered['Sector'] == sector]
-    filtered = filtered[(filtered['Price'] >= min_price) & (filtered['Price'] <= max_price)]
-    st.dataframe(filtered, use_container_width=True)
+    ticker = st.text_input('Enter a stock ticker (e.g., AAPL, RELIANCE.NS)')
+    if ticker:
+        info = yf.Ticker(ticker).info
+        st.write(info)
 
 # --- Stock Comparison Section ---
 def stock_comparison():
     st.markdown("---")
-    st.markdown("<h2 style='color:#1a73e8;'>📊 Stock Comparison</h2>", unsafe_allow_html=True)
-    all_stocks = ['AAPL', 'TSLA', 'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS', 'ITC.NS', 'SBIN.NS', 'LT.NS', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA']
-    stock1 = st.selectbox('Select First Stock', all_stocks, key='cmp1')
-    stock2 = st.selectbox('Select Second Stock', all_stocks, key='cmp2')
+    st.markdown("<h2 style='color:#1a73e8;'>📊 Stock Comparison (Financials)</h2>", unsafe_allow_html=True)
+    # Example: sector to tickers mapping (expand as needed)
+    sector_map = {
+        'Technology': ['AAPL', 'MSFT', 'GOOGL', 'TCS.NS', 'INFY.NS'],
+        'Banking': ['HDFCBANK.NS', 'ICICIBANK.NS', 'SBIN.NS', 'JPM', 'BAC'],
+        'Automotive': ['TSLA', 'F', 'GM', 'TATAMOTORS.NS'],
+        'FMCG': ['ITC.NS', 'HINDUNILVR.NS'],
+        'Energy': ['RELIANCE.NS', 'XOM', 'BPCL.NS'],
+    }
+    sector = st.selectbox('Select Sector', list(sector_map.keys()))
+    tickers = sector_map[sector]
+    stock1 = st.selectbox('Select First Stock', tickers, key='cmp1')
+    stock2 = st.selectbox('Select Second Stock', tickers, key='cmp2')
     if stock1 and stock2 and stock1 != stock2:
-        data = yf.download([stock1, stock2], period='7d', interval='1d', group_by='ticker', progress=False)
-        results = []
-        for s in [stock1, stock2]:
-            try:
-                close = data[s]['Close'].dropna()
-                if len(close) < 2:
-                    continue
-                last_two = close[-2:]
-                change = (last_two.iloc[-1] - last_two.iloc[-2]) / last_two.iloc[-2] * 100
-                results.append({'Symbol': s, 'Last Price': last_two.iloc[-1], 'Change %': change})
-            except Exception:
-                continue
-        if results:
-            df = pd.DataFrame(results)
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.write('Not enough data for comparison.')
+        stocks = [stock1, stock2]
+        fin_data = []
+        for s in stocks:
+            info = yf.Ticker(s).info
+            fin_data.append({
+                'Symbol': s,
+                'Name': info.get('shortName', ''),
+                'Gross Margin': info.get('grossMargins', 'N/A'),
+                'EBITDA': info.get('ebitda', 'N/A'),
+                'Revenue': info.get('totalRevenue', 'N/A'),
+                'Net Income': info.get('netIncomeToCommon', 'N/A'),
+                'PE Ratio': info.get('trailingPE', 'N/A'),
+                'Sector': info.get('sector', 'N/A'),
+            })
+        df = pd.DataFrame(fin_data)
+        st.dataframe(df, use_container_width=True)
     else:
         st.write('Select two different stocks to compare.')
 

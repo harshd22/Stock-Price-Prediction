@@ -24,7 +24,8 @@ st.markdown("""
 
 st.markdown("<h1 style='color:#1a73e8;'>📈 Dynamic Stock Price Prediction & Financial Insights</h1>", unsafe_allow_html=True)
 st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by <a href='https://www.linkedin.com/in/harsh-dugad-90067923b/' target='_blank'>Harsh Dugad</a>", unsafe_allow_html=True)
+st.sidebar.info("Created and designed by Harsh Dugad")
+st.sidebar.markdown("<a href='https://www.linkedin.com/in/harsh-dugad-90067923b/' target='_blank'>LinkedIn Profile</a>", unsafe_allow_html=True)
 
 # --- Data Fetching Functions ---
 @st.cache_resource

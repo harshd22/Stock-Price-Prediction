@@ -11,12 +11,22 @@ from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 
-# Title and sidebar information
-st.title('Dynamic Stock Price Prediction and Financial Insights Platform')
-st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
-st.sidebar.info("Created and designed by [Harsh Dugad](https://www.linkedin.com/in/harsh-dugad-90067923b/)")
+# --- Streamlit UI ---
+st.set_page_config(page_title="Stock Price Prediction & Insights", layout="wide")
+st.markdown("""
+    <style>
+    .main {background-color: #181c20;}
+    .block-container {padding-top: 2rem;}
+    .stButton>button {background-color: #1a73e8; color: white;}
+    .stDataFrame {background-color: #23272f;}
+    </style>
+""", unsafe_allow_html=True)
 
-# Function to get stock data and financials
+st.markdown("<h1 style='color:#1a73e8;'>📈 Dynamic Stock Price Prediction & Financial Insights</h1>", unsafe_allow_html=True)
+st.sidebar.info('Welcome to the Stock Price Prediction App. Choose your options below')
+st.sidebar.info("Created and designed by <a href='https://www.linkedin.com/in/harsh-dugad-90067923b/' target='_blank'>Harsh Dugad</a>", unsafe_allow_html=True)
+
+# --- Data Fetching Functions ---
 @st.cache_resource
 def get_stock_data(op, start_date, end_date, interval='1d'):
     try:
@@ -26,7 +36,7 @@ def get_stock_data(op, start_date, end_date, interval='1d'):
         return df
     except Exception as e:
         st.error(f"Error: {e}")
-        return pd.DataFrame()  # Return an empty DataFrame in case of an error
+        return pd.DataFrame()
 
 @st.cache_resource
 def get_stock_info(op):
@@ -38,35 +48,18 @@ def get_stock_info(op):
         st.error(f"Error: {e}")
         return {}
 
-# Get news headlines for the stock
 def get_stock_news(op):
     try:
         ticker = yf.Ticker(op)
         news = ticker.news
         if news:
-            return news[:5]  # Return top 5 news
+            return news[:5]
         else:
             return []
     except Exception as e:
         return []
 
-# Main function to handle app logic
-def main():
-    option = st.sidebar.selectbox('Make a choice', ['Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Financial Info', 'News', 'Predict'])
-    if option == 'Recent Data':
-        dataframe()
-    elif option == 'Line Chart':
-        line_chart()
-    elif option == 'Buy/Sell Recommendation':
-        buy_sell_recommendation()
-    elif option == 'Financial Info':
-        financial_info()
-    elif option == 'News':
-        news_section()
-    else:
-        predict()
-
-# Sidebar input fields
+# --- Sidebar Inputs ---
 option = st.sidebar.text_input('Enter a Stock Symbol', value='SPY')
 option = option.upper()
 today = datetime.date.today()
@@ -74,17 +67,9 @@ duration = st.sidebar.number_input('Enter the duration (in days)', value=3000)
 before = today - datetime.timedelta(days=duration)
 start_date = st.sidebar.date_input('Start Date', value=before)
 end_date = st.sidebar.date_input('End date', today)
-
-# Dropdown for time frame (not used for line chart, but kept for compatibility)
 time_frame = st.sidebar.selectbox('Select Time Frame', ['1d', '1wk', '1mo', '1y'])
-interval_map = {
-    '1d': '1d',
-    '1wk': '1wk',
-    '1mo': '1mo',
-    '1y': '1y'
-}
+interval_map = {'1d': '1d', '1wk': '1wk', '1mo': '1mo', '1y': '1y'}
 
-# Download data and get stock info based on inputs
 if st.sidebar.button('Send'):
     if start_date < end_date:
         st.sidebar.success(f'Start date: {start_date}\n\nEnd date: {end_date}')
@@ -102,43 +87,74 @@ data = get_stock_data(option, start_date, end_date, interval=interval_map.get(ti
 info = get_stock_info(option)
 scaler = StandardScaler()
 
-# Display recent data
+# --- App Sections ---
 def dataframe():
-    st.header('Recent Data')
+    st.markdown("---")
+    st.markdown("<h3 style='color:#1a73e8;'>🗂️ Recent Data</h3>", unsafe_allow_html=True)
     if not data.empty:
-        st.dataframe(data.tail(10))
+        st.dataframe(data.tail(10), use_container_width=True)
     else:
         st.write('No data available to display.')
 
-# Line chart visualization
 def line_chart():
-    st.header('Line Chart of Close Price')
+    st.markdown("---")
+    st.markdown("<h3 style='color:#1a73e8;'>📊 Line Chart of Close Price</h3>", unsafe_allow_html=True)
     if not data.empty:
         st.line_chart(data['Close'])
     else:
         st.write('No data available for line chart.')
 
-# Buy/Sell Recommendation based on recent price movement (no indicators)
 def buy_sell_recommendation():
-    st.header('Buy/Sell/Hold Recommendation')
-    if not data.empty and len(data) > 5:
-        # Simple logic: if last close > mean of last 5 closes by 1%, recommend Buy; if < by 1%, Sell; else Hold
-        last_close = data['Close'].iloc[-1]
-        mean_last5 = data['Close'].iloc[-6:-1].mean()
+    st.markdown("---")
+    st.markdown("<h3 style='color:#1a73e8;'>💡 Buy/Sell/Hold Recommendation</h3>", unsafe_allow_html=True)
+    if not data.empty and len(data) > 6:
+        last_close = float(data['Close'].iloc[-1])
+        mean_last5 = float(data['Close'].iloc[-6:-1].mean())
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Last Close", f"{last_close:.2f}")
+        with col2:
+            st.metric("Mean of Previous 5 Closes", f"{mean_last5:.2f}")
         if last_close > mean_last5 * 1.01:
-            st.success('Recommendation: BUY')
+            st.success('Recommendation: BUY 🚀')
         elif last_close < mean_last5 * 0.99:
-            st.error('Recommendation: SELL')
+            st.error('Recommendation: SELL ⚠️')
         else:
-            st.info('Recommendation: HOLD')
-        st.write(f"Last Close: {last_close:.2f}")
-        st.write(f"Mean of Previous 5 Closes: {mean_last5:.2f}")
+            st.info('Recommendation: HOLD 🤝')
     else:
         st.write('Not enough data for recommendation.')
 
-# Financial Information
+def volatility_meter():
+    st.markdown("---")
+    st.markdown("<h3 style='color:#1a73e8;'>🌪️ Volatility Meter (Last 30 Days)</h3>", unsafe_allow_html=True)
+    if not data.empty and len(data) > 30:
+        returns = data['Close'].pct_change().dropna()
+        vol = returns[-30:].std() * 100
+        st.metric("Volatility (std dev of daily returns)", f"{vol:.2f}%")
+        if vol > 3:
+            st.warning("High volatility!")
+        elif vol > 1.5:
+            st.info("Moderate volatility.")
+        else:
+            st.success("Low volatility.")
+    else:
+        st.write('Not enough data for volatility analysis.')
+
+def best_worst_day():
+    st.markdown("---")
+    st.markdown("<h3 style='color:#1a73e8;'>🏆 Best & Worst Day (Close Price Change)</h3>", unsafe_allow_html=True)
+    if not data.empty and len(data) > 1:
+        returns = data['Close'].pct_change().dropna()
+        best = returns.idxmax()
+        worst = returns.idxmin()
+        st.write(f"Best day: <b>{best.date()}</b> ({returns.max()*100:.2f}%)", unsafe_allow_html=True)
+        st.write(f"Worst day: <b>{worst.date()}</b> ({returns.min()*100:.2f}%)", unsafe_allow_html=True)
+    else:
+        st.write('Not enough data for best/worst day analysis.')
+
 def financial_info():
-    st.header('Financial Information')
+    st.markdown("---")
+    st.markdown("<h3 style='color:#1a73e8;'>💰 Financial Information</h3>", unsafe_allow_html=True)
     if info:
         def format_value(value):
             if value is None:
@@ -151,31 +167,34 @@ def financial_info():
                 return f"{value / 1e6:.2f} Million"
             else:
                 return f"{value:.2f}"
-        st.write(f"**Market Capitalization:** {format_value(info.get('marketCap', None))}")
-        st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
-        st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'N/A')}")
-        dividend_yield = info.get('dividendYield', None)
-        if dividend_yield is not None:
-            st.write(f"**Dividend Yield:** {dividend_yield * 100:.2f}%")
-        else:
-            st.write("**Dividend Yield:** No information available")
-        st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'N/A')}")
-        st.write(f"**Enterprise Value:** {format_value(info.get('enterpriseValue', None))}")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.write(f"**Market Cap:** {format_value(info.get('marketCap', None))}")
+            st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
+        with col2:
+            st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'N/A')}")
+            st.write(f"**Dividend Yield:** {info.get('dividendYield', 'N/A')}")
+        with col3:
+            st.write(f"**Forward PE Ratio:** {info.get('forwardPE', 'N/A')}")
+            st.write(f"**Enterprise Value:** {format_value(info.get('enterpriseValue', None))}")
     else:
         st.write('No financial information available.')
 
-# News Section
 def news_section():
-    st.header('Recent News Headlines')
+    st.markdown("---")
+    st.markdown("<h3 style='color:#1a73e8;'>📰 Recent News Headlines</h3>", unsafe_allow_html=True)
     news = get_stock_news(option)
     if news:
         for item in news:
-            st.markdown(f"- [{item.get('title', 'No Title')}]({item.get('link', '#')})")
+            title = item.get('title') or item.get('providerPublishTime') or 'No Title'
+            link = item.get('link', '#')
+            st.markdown(f"- [{title}]({link})")
     else:
         st.write('No news available for this stock.')
 
-# Prediction function
 def predict():
+    st.markdown("---")
+    st.markdown("<h3 style='color:#1a73e8;'>🤖 Price Prediction</h3>", unsafe_allow_html=True)
     if not data.empty:
         model = st.radio('Choose a model', ['LinearRegression', 'RandomForestRegressor', 'ExtraTreesRegressor', 'KNeighborsRegressor', 'XGBoostRegressor'])
         num = st.number_input('How many days forecast?', value=5)
@@ -199,7 +218,6 @@ def predict():
     else:
         st.write('No data available to make predictions.')
 
-# Model engine for predictions
 def model_engine(model, num):
     df = data[['Close']]
     df['preds'] = data.Close.shift(-num)
@@ -214,13 +232,34 @@ def model_engine(model, num):
     y_pred = model.predict(x_test)
     r2 = r2_score(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
-    st.write(f"**R-squared Score:** {r2:.2f}")
-    st.write(f"**Mean Absolute Error:** {mae:.2f}")
+    st.metric("R-squared Score", f"{r2:.2f}")
+    st.metric("Mean Absolute Error", f"{mae:.2f}")
     forecast = model.predict(x_forecast)
     forecast_dates = [data.index[-1] + datetime.timedelta(days=i) for i in range(1, num + 1)]
     forecast_df = pd.DataFrame(data={'Date': forecast_dates, 'Forecast': forecast})
-    st.write(forecast_df)
+    st.dataframe(forecast_df, use_container_width=True)
 
-# Run the app
-if __name__ == "__main__":
-    main() 
+# --- Main App Logic ---
+option_menu = [
+    'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Volatility Meter', 'Best/Worst Day', 'Financial Info', 'News', 'Predict'
+]
+selected = st.sidebar.selectbox('Choose Section', option_menu)
+if selected == 'Recent Data':
+    dataframe()
+elif selected == 'Line Chart':
+    line_chart()
+elif selected == 'Buy/Sell Recommendation':
+    buy_sell_recommendation()
+elif selected == 'Volatility Meter':
+    volatility_meter()
+elif selected == 'Best/Worst Day':
+    best_worst_day()
+elif selected == 'Financial Info':
+    financial_info()
+elif selected == 'News':
+    news_section()
+else:
+    predict()
+
+st.markdown("---")
+st.markdown("<div style='text-align:center; color:gray;'>Made with ❤️ by <a href='https://www.linkedin.com/in/harsh-dugad-90067923b/' target='_blank'>Harsh Dugad</a></div>", unsafe_allow_html=True) 

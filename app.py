@@ -157,14 +157,17 @@ def home_screen():
         if st.button('🔎 Stock Screener', key='nav_screener'):
             st.session_state['nav_section'] = 'Stock Screener'
             st.experimental_rerun()
+            return
     with nav_cols[1]:
         if st.button('📊 Stock Comparison', key='nav_comparison'):
             st.session_state['nav_section'] = 'Stock Comparison'
             st.experimental_rerun()
+            return
     with nav_cols[2]:
         if st.button('📰 News', key='nav_news'):
             st.session_state['nav_section'] = 'News'
             st.experimental_rerun()
+            return
 
     # Market Overview Cards (unchanged)
     indices = {
@@ -504,13 +507,18 @@ def stock_comparison():
 option_menu = [
     'Home', 'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Stock Screener', 'Stock Comparison', 'Financial Info', 'News', 'Predict'
 ]
-# Use session state for navigation from home screen buttons
-if 'nav_section' in st.session_state:
-    selected = st.session_state['nav_section']
-    # Reset after use so sidebar can take over
-    del st.session_state['nav_section']
-else:
-    selected = st.sidebar.selectbox('Choose Section', option_menu)
+
+# Set default section if not in session state
+if 'nav_section' not in st.session_state:
+    st.session_state['nav_section'] = 'Home'
+
+# Sidebar selectbox always visible, uses session state as default
+selected = st.sidebar.selectbox('Choose Section', option_menu, index=option_menu.index(st.session_state['nav_section']))
+
+# If user selects a new section from sidebar, update session state
+if selected != st.session_state['nav_section']:
+    st.session_state['nav_section'] = selected
+    st.experimental_rerun()
 
 if selected == 'Home':
     home_screen()

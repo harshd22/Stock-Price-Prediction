@@ -537,7 +537,7 @@ def gemini_chatbot_section():
         with st.spinner("Gemini is thinking..."):
             model = genai.GenerativeModel("gemini-pro")
             convo = model.start_chat(history=[
-                (m["role"], m["content"]) for m in st.session_state["gemini_chat_history"]
+                {"role": m["role"], "parts": [m["content"]]} for m in st.session_state["gemini_chat_history"]
             ])
             response = convo.send_message(user_input)
             answer = response.text

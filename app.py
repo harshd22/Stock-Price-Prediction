@@ -101,10 +101,8 @@ def predict_prices(df, forecast_days, model):
     last_X = df[features].values[-forecast_days:]
     last_X_scaled = scaler.transform(last_X)
     forecast = model.predict(last_X_scaled)
-    # Ensure forecast is always 1D
-    forecast = forecast.squeeze()
-    if forecast.ndim > 1:
-        forecast = forecast.ravel()
+    # Always flatten forecast to 1D
+    forecast = forecast.reshape(-1)
     last_date = df.index[-1]
     forecast_dates = [last_date + datetime.timedelta(days=i+1) for i in range(forecast_days)]
     forecast_df = pd.DataFrame({"Date": forecast_dates, "Forecast": forecast})
@@ -154,7 +152,7 @@ if run:
             st.write("**Forecasted Prices and Signals:**")
             st.dataframe(forecast_df)
             # Always pass 1D Series to line_chart for forecast
-            st.line_chart(pd.Series(forecast_df["Forecast"].values.squeeze(), index=forecast_df["Date"]))
+            st.line_chart(pd.Series(forecast_df["Forecast"].to_numpy().reshape(-1), index=forecast_df["Date"]))
             st.write("**Forecasted Signals:**")
             st.dataframe(forecast_df[["Date", "Signal"]])
     except Exception as e:

@@ -10,6 +10,8 @@ from sklearn.neighbors import KNeighborsRegressor
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
+import math
+import requests
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Stock Price Prediction & Insights", layout="wide")
@@ -49,15 +51,21 @@ def get_stock_info(op):
         st.error(f"Error: {e}")
         return {}
 
-def get_stock_news(op):
-    try:
-        ticker = yf.Ticker(op)
-        news = ticker.news
-        if news:
-            return news[:5]
-        else:
-            return []
-    except Exception as e:
+# NewsAPI.org integration
+def get_newsapi_news(query):
+    api_key = "7227a18d537b49779ffb88a209d0d0e3"
+    url = (
+        f"https://newsapi.org/v2/everything?"
+        f"q={query}&"
+        f"sortBy=publishedAt&"
+        f"language=en&"
+        f"apiKey={api_key}"
+    )
+    response = requests.get(url)
+    if response.status_code == 200:
+        articles = response.json().get('articles', [])
+        return articles[:5]  # Top 5 news
+    else:
         return []
 
 # --- Sidebar Inputs ---
@@ -132,13 +140,16 @@ def volatility_meter():
     if not data.empty and len(data) > 30:
         returns = data['Close'].pct_change().dropna()
         vol = returns[-30:].std() * 100
-        st.metric("Volatility (std dev of daily returns)", f"{vol:.2f}%")
-        if vol > 3:
-            st.warning("High volatility!")
-        elif vol > 1.5:
-            st.info("Moderate volatility.")
+        if math.isnan(vol):
+            st.info("Volatility could not be calculated (not enough price movement or data).")
         else:
-            st.success("Low volatility.")
+            st.metric("Volatility (std dev of daily returns)", f"{vol:.2f}%")
+            if vol > 3:
+                st.warning("High volatility!")
+            elif vol > 1.5:
+                st.info("Moderate volatility.")
+            else:
+                st.success("Low volatility.")
     else:
         st.write('Not enough data for volatility analysis.')
 
@@ -149,8 +160,10 @@ def best_worst_day():
         returns = data['Close'].pct_change().dropna()
         best = returns.idxmax()
         worst = returns.idxmin()
-        st.write(f"Best day: <b>{best.date()}</b> ({returns.max()*100:.2f}%)", unsafe_allow_html=True)
-        st.write(f"Worst day: <b>{worst.date()}</b> ({returns.min()*100:.2f}%)", unsafe_allow_html=True)
+        best_str = str(best.date()) if hasattr(best, 'date') else str(best)
+        worst_str = str(worst.date()) if hasattr(worst, 'date') else str(worst)
+        st.write(f"Best day: <b>{best_str}</b> ({returns.max()*100:.2f}%)", unsafe_allow_html=True)
+        st.write(f"Worst day: <b>{worst_str}</b> ({returns.min()*100:.2f}%)", unsafe_allow_html=True)
     else:
         st.write('Not enough data for best/worst day analysis.')
 
@@ -185,13 +198,11 @@ def financial_info():
 def news_section():
     st.markdown("---")
     st.markdown("<h3 style='color:#1a73e8;'>📰 Recent News Headlines</h3>", unsafe_allow_html=True)
-    if st.button("Refresh News"):
-        st.session_state['news'] = get_stock_news(option)
-    news = st.session_state.get('news', get_stock_news(option))
+    news = get_newsapi_news(option)
     if news:
         for item in news:
-            title = item.get('title') or item.get('providerPublishTime') or 'No Title'
-            link = item.get('link', '#')
+            title = item.get('title', 'No Title')
+            link = item.get('url', '#')
             st.markdown(f"- [{title}]({link})")
     else:
         st.write('No news available for this stock.')

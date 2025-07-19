@@ -100,7 +100,7 @@ def predict_prices(df, forecast_days, model):
     # Forecast
     last_X = df[features].values[-forecast_days:]
     last_X_scaled = scaler.transform(last_X)
-    forecast = model.predict(last_X_scaled)
+    forecast = model.predict(last_X_scaled).flatten()
     last_date = df.index[-1]
     forecast_dates = [last_date + datetime.timedelta(days=i+1) for i in range(forecast_days)]
     forecast_df = pd.DataFrame({"Date": forecast_dates, "Forecast": forecast})
@@ -145,7 +145,7 @@ if run:
             )
             st.write("**Forecasted Prices and Signals:**")
             st.dataframe(forecast_df)
-            st.line_chart(forecast_df.set_index("Date")["Forecast"])
+            st.line_chart(pd.Series(forecast_df["Forecast"].values, index=forecast_df["Date"]))
             st.write("**Forecasted Signals:**")
             st.dataframe(forecast_df[["Date", "Signal"]])
     except Exception as e:

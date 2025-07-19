@@ -81,12 +81,14 @@ def get_newsapi_news(query):
     else:
         return []
 
-# --- Home Screen: Top Gainers & Losers ---
+# --- Home Screen: Top Gainers & Losers, Market Summary, Sentiment, Quick Links ---
 def get_top_movers():
     # Use a set of popular tickers for demo; for real use, fetch from a screener API
     tickers = [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX', 'AMD', 'INTC',
-        'BA', 'JPM', 'WMT', 'DIS', 'NKE', 'V', 'MA', 'PYPL', 'ADBE', 'CRM', 'CSCO', 'QCOM', 'ORCL', 'PEP', 'KO'
+        'BA', 'JPM', 'WMT', 'DIS', 'NKE', 'V', 'MA', 'PYPL', 'ADBE', 'CRM', 'CSCO', 'QCOM', 'ORCL', 'PEP', 'KO',
+        'T', 'GE', 'GM', 'F', 'UBER', 'LYFT', 'SHOP', 'BABA', 'TCS.NS', 'INFY.NS', 'RELIANCE.NS', 'HDFCBANK.NS',
+        'NIFTYBEES.NS', 'BANKBEES.NS', 'SPY', 'QQQ', 'DIA', 'IWM', 'GLD', 'SLV', 'BTC-USD', 'ETH-USD'
     ]
     data = yf.download(tickers, period='2d', interval='1d', group_by='ticker', progress=False)
     movers = []
@@ -100,9 +102,44 @@ def get_top_movers():
         except Exception:
             continue
     movers = sorted(movers, key=lambda x: x['change'], reverse=True)
-    gainers = movers[:5]
-    losers = movers[-5:][::-1]
+    gainers = movers[:10]
+    losers = movers[-10:][::-1]
     return gainers, losers
+
+def get_market_summary():
+    indices = {
+        'S&P 500': '^GSPC',
+        'NASDAQ': '^IXIC',
+        'DOW JONES': '^DJI',
+        'NIFTY 50': '^NSEI',
+        'BANK NIFTY': '^NSEBANK',
+        'FTSE 100': '^FTSE',
+        'DAX': '^GDAXI',
+        'BTC-USD': 'BTC-USD',
+        'ETH-USD': 'ETH-USD',
+    }
+    data = yf.download(list(indices.values()), period='2d', interval='1d', group_by='ticker', progress=False)
+    summary = []
+    for name, symbol in indices.items():
+        try:
+            close = data[symbol]['Close']
+            if len(close) < 2:
+                continue
+            change = (close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100
+            summary.append({'name': name, 'last': close.iloc[-1], 'change': change})
+        except Exception:
+            continue
+    return summary
+
+def get_market_sentiment(gainers, losers):
+    bullish = sum(1 for g in gainers if g['change'] > 2)
+    bearish = sum(1 for l in losers if l['change'] < -2)
+    if bullish > bearish and bullish >= 5:
+        return 'Bullish', '🟢'
+    elif bearish > bullish and bearish >= 5:
+        return 'Bearish', '🔴'
+    else:
+        return 'Neutral', '🟡'
 
 def home_screen():
     st.markdown("---")
@@ -110,12 +147,39 @@ def home_screen():
     st.markdown("<h4>Welcome to the Dynamic Stock Price Prediction & Financial Insights Platform!</h4>", unsafe_allow_html=True)
     st.write("Explore top gainers and losers, get predictions, news, and more.")
     gainers, losers = get_top_movers()
-    st.markdown("<h5 style='color:green;'>Top Gainers</h5>", unsafe_allow_html=True)
+    market_summary = get_market_summary()
+    sentiment, sentiment_icon = get_market_sentiment(gainers, losers)
+    # Market Summary
+    st.markdown("<h5 style='color:#1a73e8;'>🌍 Market Summary</h5>", unsafe_allow_html=True)
+    cols = st.columns(len(market_summary))
+    for i, idx in enumerate(market_summary):
+        color = 'green' if idx['change'] > 0 else 'red' if idx['change'] < 0 else 'gray'
+        arrow = '▲' if idx['change'] > 0 else '▼' if idx['change'] < 0 else '■'
+        with cols[i]:
+            st.markdown(f"<div style='text-align:center;'><b>{idx['name']}</b><br><span style='color:{color};'>{idx['last']:.2f} {arrow} {idx['change']:+.2f}%</span></div>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    # Sentiment
+    st.markdown(f"<h5 style='color:#1a73e8;'>Market Sentiment: {sentiment_icon} <span style='color:#444;'>{sentiment}</span></h5>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    # Top Gainers/Losers
+    st.markdown("<h5 style='color:green;'>Top 10 Gainers</h5>", unsafe_allow_html=True)
     gainer_ticker = " | ".join([f"<b>{g['symbol']}</b> ({g['change']:+.2f}%)" for g in gainers])
     st.markdown(f"<div class='ticker'>{gainer_ticker}</div>", unsafe_allow_html=True)
-    st.markdown("<h5 style='color:red;'>Top Losers</h5>", unsafe_allow_html=True)
+    st.markdown("<h5 style='color:red;'>Top 10 Losers</h5>", unsafe_allow_html=True)
     loser_ticker = " | ".join([f"<b>{l['symbol']}</b> ({l['change']:+.2f}%)" for l in losers])
     st.markdown(f"<div class='ticker'>{loser_ticker}</div>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
+    # Quick Links
+    st.markdown("<h5 style='color:#1a73e8;'>🔗 Quick Links</h5>", unsafe_allow_html=True)
+    qcols = st.columns(4)
+    with qcols[0]:
+        st.markdown("<a href='https://finance.yahoo.com/' target='_blank'>Yahoo Finance</a>", unsafe_allow_html=True)
+    with qcols[1]:
+        st.markdown("<a href='https://www.tradingview.com/' target='_blank'>TradingView</a>", unsafe_allow_html=True)
+    with qcols[2]:
+        st.markdown("<a href='https://www.cnbc.com/markets/' target='_blank'>CNBC Markets</a>", unsafe_allow_html=True)
+    with qcols[3]:
+        st.markdown("<a href='https://www.investing.com/' target='_blank'>Investing.com</a>", unsafe_allow_html=True)
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("<h4>🔍 Use the sidebar to search for a stock and explore predictions, news, and more!</h4>", unsafe_allow_html=True)
 

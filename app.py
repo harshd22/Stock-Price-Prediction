@@ -153,21 +153,21 @@ def home_screen():
     # --- Dashboard Navigation Buttons ---
     st.markdown("<h5 style='color:#1a73e8;'>🚀 Quick Access</h5>", unsafe_allow_html=True)
     nav_cols = st.columns(3)
+    nav_clicked = None
     with nav_cols[0]:
         if st.button('🔎 Stock Screener', key='nav_screener'):
-            st.session_state['nav_section'] = 'Stock Screener'
-            st.experimental_rerun()
-            return
+            nav_clicked = 'Stock Screener'
     with nav_cols[1]:
         if st.button('📊 Stock Comparison', key='nav_comparison'):
-            st.session_state['nav_section'] = 'Stock Comparison'
-            st.experimental_rerun()
-            return
+            nav_clicked = 'Stock Comparison'
     with nav_cols[2]:
         if st.button('📰 News', key='nav_news'):
-            st.session_state['nav_section'] = 'News'
-            st.experimental_rerun()
-            return
+            nav_clicked = 'News'
+
+    if nav_clicked:
+        st.session_state['nav_section'] = nav_clicked
+        st.experimental_rerun()
+        return  # <--- This ensures no further code runs after rerun
 
     # Market Overview Cards (unchanged)
     indices = {

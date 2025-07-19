@@ -90,9 +90,11 @@ if run:
             st.line_chart(df["Close"])
             if show_candle:
                 st.subheader("Candlestick Chart")
-                # Check for required columns and non-empty data
                 required_cols = ["Open", "High", "Low", "Close"]
-                if all(col in df.columns for col in required_cols) and not df[required_cols].isnull().any().any() and not df[required_cols].empty:
+                has_all_cols = all(col in df.columns for col in required_cols)
+                no_nans = not df[required_cols].isnull().values.any()
+                not_empty = not df[required_cols].empty
+                if has_all_cols and no_nans and not_empty:
                     fig = go.Figure(data=[go.Candlestick(
                         x=df.index,
                         open=df["Open"],
@@ -109,7 +111,6 @@ if run:
             st.write(f"**R² Score:** {r2:.3f}")
             st.write(f"**Mean Absolute Error:** {mae:.3f}")
             last_close = df["Close"].iloc[-1]
-            # Fix ambiguous Series error by using numpy/scalar comparison
             forecast_df["Signal"] = forecast_df["Forecast"].apply(
                 lambda x: "Buy" if x > (last_close * 1.01) else ("Sell" if x < (last_close * 0.99) else "Hold")
             )

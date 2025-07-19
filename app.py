@@ -10,7 +10,6 @@ from sklearn.neighbors import KNeighborsRegressor
 from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
-import plotly.graph_objects as go  # for candlestick chart
 
 # Title and sidebar information
 st.title('Dynamic Stock Price Prediction and Financial Insights Platform')
@@ -39,15 +38,31 @@ def get_stock_info(op):
         st.error(f"Error: {e}")
         return {}
 
+# Get news headlines for the stock
+def get_stock_news(op):
+    try:
+        ticker = yf.Ticker(op)
+        news = ticker.news
+        if news:
+            return news[:5]  # Return top 5 news
+        else:
+            return []
+    except Exception as e:
+        return []
+
 # Main function to handle app logic
 def main():
-    option = st.sidebar.selectbox('Make a choice', ['Recent Data', 'Candlestick', 'Financial Info', 'Predict'])
+    option = st.sidebar.selectbox('Make a choice', ['Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Financial Info', 'News', 'Predict'])
     if option == 'Recent Data':
         dataframe()
-    elif option == 'Candlestick':
-        candlestick_chart()
+    elif option == 'Line Chart':
+        line_chart()
+    elif option == 'Buy/Sell Recommendation':
+        buy_sell_recommendation()
     elif option == 'Financial Info':
         financial_info()
+    elif option == 'News':
+        news_section()
     else:
         predict()
 
@@ -60,10 +75,8 @@ before = today - datetime.timedelta(days=duration)
 start_date = st.sidebar.date_input('Start Date', value=before)
 end_date = st.sidebar.date_input('End date', today)
 
-# Dropdown for candlestick time frame
+# Dropdown for time frame (not used for line chart, but kept for compatibility)
 time_frame = st.sidebar.selectbox('Select Time Frame', ['1d', '1wk', '1mo', '1y'])
-
-# Define mapping from time frame to Yahoo Finance interval
 interval_map = {
     '1d': '1d',
     '1wk': '1wk',
@@ -85,7 +98,6 @@ if st.sidebar.button('Send'):
     else:
         st.sidebar.error('Error: End date must fall after start date')
 
-# Download the data globally for access in different functions
 data = get_stock_data(option, start_date, end_date, interval=interval_map.get(time_frame, '1d'))
 info = get_stock_info(option)
 scaler = StandardScaler()
@@ -98,35 +110,36 @@ def dataframe():
     else:
         st.write('No data available to display.')
 
-# Candlestick chart visualization
-def candlestick_chart():
-    st.header('Candlestick Chart')
+# Line chart visualization
+def line_chart():
+    st.header('Line Chart of Close Price')
     if not data.empty:
-        required_cols = ["Open", "High", "Low", "Close"]
-        has_all_cols = all(col in data.columns for col in required_cols)
-        no_nans = not data[required_cols].isnull().values.any()
-        not_empty = not data[required_cols].empty
-        if has_all_cols and no_nans and not_empty:
-            fig = go.Figure(data=[go.Candlestick(x=data.index,
-                                                 open=data['Open'],
-                                                 high=data['High'],
-                                                 low=data['Low'],
-                                                 close=data['Close'])])
-            fig.update_layout(title=f'Candlestick chart for {option} ({interval_map.get(time_frame, "1d")})',
-                              xaxis_title='Date',
-                              yaxis_title='Price',
-                              xaxis_rangeslider_visible=False)
-            st.plotly_chart(fig)
-        else:
-            st.write('No data available for candlestick chart.')
+        st.line_chart(data['Close'])
     else:
-        st.write('No data available for candlestick chart.')
+        st.write('No data available for line chart.')
+
+# Buy/Sell Recommendation based on recent price movement (no indicators)
+def buy_sell_recommendation():
+    st.header('Buy/Sell/Hold Recommendation')
+    if not data.empty and len(data) > 5:
+        # Simple logic: if last close > mean of last 5 closes by 1%, recommend Buy; if < by 1%, Sell; else Hold
+        last_close = data['Close'].iloc[-1]
+        mean_last5 = data['Close'].iloc[-6:-1].mean()
+        if last_close > mean_last5 * 1.01:
+            st.success('Recommendation: BUY')
+        elif last_close < mean_last5 * 0.99:
+            st.error('Recommendation: SELL')
+        else:
+            st.info('Recommendation: HOLD')
+        st.write(f"Last Close: {last_close:.2f}")
+        st.write(f"Mean of Previous 5 Closes: {mean_last5:.2f}")
+    else:
+        st.write('Not enough data for recommendation.')
 
 # Financial Information
 def financial_info():
     st.header('Financial Information')
     if info:
-        # Function to format large numbers
         def format_value(value):
             if value is None:
                 return 'N/A'
@@ -138,7 +151,6 @@ def financial_info():
                 return f"{value / 1e6:.2f} Million"
             else:
                 return f"{value:.2f}"
-
         st.write(f"**Market Capitalization:** {format_value(info.get('marketCap', None))}")
         st.write(f"**PE Ratio (TTM):** {info.get('trailingPE', 'N/A')}")
         st.write(f"**Price to Book Ratio:** {info.get('priceToBook', 'N/A')}")
@@ -151,6 +163,16 @@ def financial_info():
         st.write(f"**Enterprise Value:** {format_value(info.get('enterpriseValue', None))}")
     else:
         st.write('No financial information available.')
+
+# News Section
+def news_section():
+    st.header('Recent News Headlines')
+    news = get_stock_news(option)
+    if news:
+        for item in news:
+            st.markdown(f"- [{item.get('title', 'No Title')}]({item.get('link', '#')})")
+    else:
+        st.write('No news available for this stock.')
 
 # Prediction function
 def predict():
@@ -179,32 +201,21 @@ def predict():
 
 # Model engine for predictions
 def model_engine(model, num):
-    # getting only the closing price
     df = data[['Close']]
-    # shifting the closing price based on number of days forecast
     df['preds'] = data.Close.shift(-num)
-    # scaling the data
     x = df.drop(['preds'], axis=1).values
     x = scaler.fit_transform(x)
-    # storing the last num_days data
     x_forecast = x[-num:]
-    # selecting the required values for training
     x = x[:-num]
-    # getting the preds column
     y = df.preds.values
-    # selecting the required values for training
     y = y[:-num]
-
-    # Splitting the data
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=0)
-    # Training the model
     model.fit(x_train, y_train)
     y_pred = model.predict(x_test)
     r2 = r2_score(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
     st.write(f"**R-squared Score:** {r2:.2f}")
     st.write(f"**Mean Absolute Error:** {mae:.2f}")
-    # making predictions
     forecast = model.predict(x_forecast)
     forecast_dates = [data.index[-1] + datetime.timedelta(days=i) for i in range(1, num + 1)]
     forecast_df = pd.DataFrame(data={'Date': forecast_dates, 'Forecast': forecast})

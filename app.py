@@ -12,7 +12,7 @@ from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 import requests
 import random
-import os
+import google.generativeai as genai
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Stock Price Prediction & Insights", layout="wide")
@@ -386,50 +386,11 @@ def model_engine(model, num):
     forecast_df = pd.DataFrame(data={'Date': forecast_dates, 'Forecast': forecast})
     st.dataframe(forecast_df, use_container_width=True)
 
-# --- Helper: Load Indian Ticker List for Autocomplete ---
-@st.cache_data
-def load_india_ticker_list():
-    india_csv = 'EQUITY_L.csv'
-    if os.path.exists(india_csv):
-        india_df = pd.read_csv(india_csv)
-        india_df['Symbol'] = india_df['SYMBOL'] + '.NS'
-        india_df['display'] = india_df['NAME OF COMPANY'] + ' (' + india_df['Symbol'] + ')'
-        return india_df[['Symbol', 'display']]
-    else:
-        return None
-
-# --- Helper: NSE India Autocomplete API ---
-def nse_autocomplete(query):
-    url = f"https://www.nseindia.com/api/search/autocomplete?q={query}"
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Accept": "application/json"
-    }
-    try:
-        resp = requests.get(url, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            results = resp.json().get('symbols', [])
-            # Only return equities, and format for yfinance
-            return [f"{item['symbol']}.NS - {item['company']}" for item in results if item['series'] == 'EQ']
-        else:
-            return []
-    except Exception:
-        return []
-
 # --- Stock Screener Section ---
 def stock_screener():
     st.markdown("---")
     st.markdown("<h2 style='color:#1a73e8;'>🔎 Stock Screener</h2>", unsafe_allow_html=True)
-    query = st.text_input('Type company name or symbol (Indian stocks)')
-    suggestions = nse_autocomplete(query) if query else []
-    ticker = None
-    if suggestions:
-        selected = st.selectbox('Select a company', suggestions)
-        ticker = selected.split(' - ')[0]
-    else:
-        ticker = query if query else None
+    ticker = st.text_input('Enter a stock ticker (e.g., AAPL, RELIANCE.NS)')
     if ticker:
         info = yf.Ticker(ticker).info
         st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
@@ -467,22 +428,8 @@ def stock_screener():
 def stock_comparison():
     st.markdown("---")
     st.markdown("<h2 style='color:#1a73e8;'>📊 Stock Comparison (Financials)</h2>", unsafe_allow_html=True)
-    query1 = st.text_input('Type first company name or symbol (Indian stocks)', key='cmp1')
-    suggestions1 = nse_autocomplete(query1) if query1 else []
-    ticker1 = None
-    if suggestions1:
-        selected1 = st.selectbox('Select first company', suggestions1, key='cmp1_select')
-        ticker1 = selected1.split(' - ')[0]
-    else:
-        ticker1 = query1 if query1 else None
-    query2 = st.text_input('Type second company name or symbol (same sector)', key='cmp2')
-    suggestions2 = nse_autocomplete(query2) if query2 else []
-    ticker2 = None
-    if suggestions2:
-        selected2 = st.selectbox('Select second company', suggestions2, key='cmp2_select')
-        ticker2 = selected2.split(' - ')[0]
-    else:
-        ticker2 = query2 if query2 else None
+    ticker1 = st.text_input('Enter First Stock Ticker (e.g., AAPL, RELIANCE.NS)', key='cmp1')
+    ticker2 = st.text_input('Enter Second Stock Ticker (same sector)', key='cmp2')
     if ticker1 and ticker2 and ticker1 != ticker2:
         info1 = yf.Ticker(ticker1).info
         info2 = yf.Ticker(ticker2).info
@@ -538,6 +485,65 @@ def stock_comparison():
     else:
         st.write('Enter two different stock tickers to compare (same sector).')
 
+# --- Gemini Chatbot Floating Button ---
+CHATBOT_API_KEY = "AIzaSyAuHfpiINkJ4zm9h4L8StqwHJvC40EX7lg"
+
+def gemini_chatbot_fab():
+    # Floating button CSS
+    st.markdown('''
+        <style>
+        #chatbot-fab {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            z-index: 9999;
+        }
+        #chatbot-fab img {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            background: #fff;
+            border: 2px solid #1a73e8;
+        }
+        </style>
+        <div id="chatbot-fab">
+            <img src="https://cdn-icons-png.flaticon.com/512/4712/4712035.png" onclick="window.dispatchEvent(new Event('openGeminiChat'))" title="Chat with Gemini AI" />
+        </div>
+        <script>
+        window.addEventListener('openGeminiChat', function() {
+            var el = window.parent.document.querySelector('details[open]');
+            if (el) el.removeAttribute('open');
+            var chatExpander = window.parent.document.querySelector('details[data-testid="stExpander"]');
+            if (chatExpander) chatExpander.setAttribute('open', 'true');
+        });
+        </script>
+    ''', unsafe_allow_html=True)
+    # Expander for chatbot
+    with st.expander("💬 Gemini Chatbot", expanded=False):
+        gemini_chatbot_section()
+
+# --- Gemini Chatbot Section ---
+def gemini_chatbot_section():
+    genai.configure(api_key=CHATBOT_API_KEY)
+    if "gemini_chat_history" not in st.session_state:
+        st.session_state["gemini_chat_history"] = []
+    for msg in st.session_state["gemini_chat_history"]:
+        st.chat_message(msg["role"]).write(msg["content"])
+    user_input = st.chat_input("Ask Gemini anything about stocks, finance, or the market!")
+    if user_input:
+        st.session_state["gemini_chat_history"].append({"role": "user", "content": user_input})
+        with st.spinner("Gemini is thinking..."):
+            model = genai.GenerativeModel("gemini-pro")
+            convo = model.start_chat(history=[
+                (m["role"], m["content"]) for m in st.session_state["gemini_chat_history"]
+            ])
+            response = convo.send_message(user_input)
+            answer = response.text
+        st.session_state["gemini_chat_history"].append({"role": "assistant", "content": answer})
+        st.chat_message("assistant").write(answer)
+
 # --- Main App Logic ---
 option_menu = [
     'Home', 'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Stock Screener', 'Stock Comparison', 'Financial Info', 'News', 'Predict'
@@ -562,5 +568,6 @@ elif selected == 'News':
 else:
     predict()
 
+gemini_chatbot_fab()
 st.markdown("---")
 st.markdown("<div style='text-align:center; color:gray;'>Made with ❤️ by Harsh Dugad</div>", unsafe_allow_html=True) 

@@ -392,43 +392,97 @@ def stock_screener():
     ticker = st.text_input('Enter a stock ticker (e.g., AAPL, RELIANCE.NS)')
     if ticker:
         info = yf.Ticker(ticker).info
-        st.write(info)
+        st.markdown(f"### {info.get('shortName', ticker)} ({ticker})")
+        st.write(f"**Sector:** {info.get('sector', 'N/A')} | **Industry:** {info.get('industry', 'N/A')}")
+        st.write(f"**Website:** [{info.get('website', 'N/A')}]({info.get('website', '#')})")
+        st.write(f"**Description:** {info.get('longBusinessSummary', 'N/A')}")
+        st.write("#### Key Financials")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Market Cap", f"{info.get('marketCap', 'N/A'):,}")
+            st.metric("Revenue", f"{info.get('totalRevenue', 'N/A'):,}")
+            st.metric("Net Income", f"{info.get('netIncomeToCommon', 'N/A'):,}")
+        with col2:
+            st.metric("EBITDA", f"{info.get('ebitda', 'N/A'):,}")
+            st.metric("Gross Margin", f"{info.get('grossMargins', 'N/A')}")
+            st.metric("PE Ratio", f"{info.get('trailingPE', 'N/A')}")
+        with col3:
+            st.metric("Dividend Yield", f"{info.get('dividendYield', 'N/A')}")
+            st.metric("Book Value", f"{info.get('bookValue', 'N/A')}")
+            st.metric("Employees", f"{info.get('fullTimeEmployees', 'N/A')}")
+        # CEO & Founder
+        ceo = None
+        founder = None
+        officers = info.get('companyOfficers', [])
+        for officer in officers:
+            title = officer.get('title', '').lower()
+            if 'ceo' in title and not ceo:
+                ceo = officer.get('name')
+            if 'founder' in title and not founder:
+                founder = officer.get('name')
+        st.write(f"**CEO:** {ceo or 'N/A'}")
+        st.write(f"**Founder:** {founder or 'N/A'}")
 
 # --- Stock Comparison Section ---
 def stock_comparison():
     st.markdown("---")
     st.markdown("<h2 style='color:#1a73e8;'>📊 Stock Comparison (Financials)</h2>", unsafe_allow_html=True)
-    # Example: sector to tickers mapping (expand as needed)
-    sector_map = {
-        'Technology': ['AAPL', 'MSFT', 'GOOGL', 'TCS.NS', 'INFY.NS'],
-        'Banking': ['HDFCBANK.NS', 'ICICIBANK.NS', 'SBIN.NS', 'JPM', 'BAC'],
-        'Automotive': ['TSLA', 'F', 'GM', 'TATAMOTORS.NS'],
-        'FMCG': ['ITC.NS', 'HINDUNILVR.NS'],
-        'Energy': ['RELIANCE.NS', 'XOM', 'BPCL.NS'],
-    }
-    sector = st.selectbox('Select Sector', list(sector_map.keys()))
-    tickers = sector_map[sector]
-    stock1 = st.selectbox('Select First Stock', tickers, key='cmp1')
-    stock2 = st.selectbox('Select Second Stock', tickers, key='cmp2')
-    if stock1 and stock2 and stock1 != stock2:
-        stocks = [stock1, stock2]
-        fin_data = []
-        for s in stocks:
-            info = yf.Ticker(s).info
-            fin_data.append({
-                'Symbol': s,
-                'Name': info.get('shortName', ''),
-                'Gross Margin': info.get('grossMargins', 'N/A'),
-                'EBITDA': info.get('ebitda', 'N/A'),
-                'Revenue': info.get('totalRevenue', 'N/A'),
-                'Net Income': info.get('netIncomeToCommon', 'N/A'),
-                'PE Ratio': info.get('trailingPE', 'N/A'),
-                'Sector': info.get('sector', 'N/A'),
-            })
-        df = pd.DataFrame(fin_data)
+    ticker1 = st.text_input('Enter First Stock Ticker (e.g., AAPL, RELIANCE.NS)', key='cmp1')
+    ticker2 = st.text_input('Enter Second Stock Ticker (same sector)', key='cmp2')
+    if ticker1 and ticker2 and ticker1 != ticker2:
+        info1 = yf.Ticker(ticker1).info
+        info2 = yf.Ticker(ticker2).info
+        sector1 = info1.get('sector', 'N/A')
+        sector2 = info2.get('sector', 'N/A')
+        if sector1 != sector2:
+            st.warning(f"Both stocks must be from the same sector! {ticker1}: {sector1}, {ticker2}: {sector2}")
+            return
+        metrics = [
+            ('Gross Margin', 'grossMargins', True),
+            ('EBITDA', 'ebitda', True),
+            ('Net Income', 'netIncomeToCommon', True),
+            ('PE Ratio', 'trailingPE', False),
+            ('Revenue', 'totalRevenue', True),
+            ('Dividend Yield', 'dividendYield', True),
+        ]
+        data = []
+        for label, key, higher_is_better in metrics:
+            v1 = info1.get(key, None)
+            v2 = info2.get(key, None)
+            if v1 is not None and v2 is not None:
+                better = ticker1 if (v1 > v2 if higher_is_better else v1 < v2) else ticker2
+                data.append({
+                    'Metric': label,
+                    ticker1: v1,
+                    ticker2: v2,
+                    'Better': better
+                })
+            else:
+                data.append({
+                    'Metric': label,
+                    ticker1: v1 if v1 is not None else 'N/A',
+                    ticker2: v2 if v2 is not None else 'N/A',
+                    'Better': 'N/A'
+                })
+        df = pd.DataFrame(data)
         st.dataframe(df, use_container_width=True)
+        # Suggestion
+        better_counts = df['Better'].value_counts()
+        if ticker1 in better_counts and ticker2 in better_counts:
+            if better_counts[ticker1] > better_counts[ticker2]:
+                st.success(f"{ticker1} is better in more metrics.")
+            elif better_counts[ticker2] > better_counts[ticker1]:
+                st.success(f"{ticker2} is better in more metrics.")
+            else:
+                st.info("Both stocks are similar based on available metrics.")
+        elif ticker1 in better_counts:
+            st.success(f"{ticker1} is better based on available metrics.")
+        elif ticker2 in better_counts:
+            st.success(f"{ticker2} is better based on available metrics.")
+        else:
+            st.info("Not enough data to compare these stocks.")
     else:
-        st.write('Select two different stocks to compare.')
+        st.write('Enter two different stock tickers to compare (same sector).')
 
 # --- Main App Logic ---
 option_menu = [

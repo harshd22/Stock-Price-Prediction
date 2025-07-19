@@ -83,27 +83,27 @@ def get_newsapi_news(query):
 
 # --- Home Screen: Top Gainers & Losers, Market Summary, Sentiment, Quick Links ---
 def get_top_movers():
-    # Use a set of popular tickers for demo; for real use, fetch from a screener API
     tickers = [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX', 'AMD', 'INTC',
         'BA', 'JPM', 'WMT', 'DIS', 'NKE', 'V', 'MA', 'PYPL', 'ADBE', 'CRM', 'CSCO', 'QCOM', 'ORCL', 'PEP', 'KO',
         'T', 'GE', 'GM', 'F', 'UBER', 'LYFT', 'SHOP', 'BABA', 'TCS.NS', 'INFY.NS', 'RELIANCE.NS', 'HDFCBANK.NS',
         'NIFTYBEES.NS', 'BANKBEES.NS', 'SPY', 'QQQ', 'DIA', 'IWM', 'GLD', 'SLV', 'BTC-USD', 'ETH-USD'
     ]
-    data = yf.download(tickers, period='2d', interval='1d', group_by='ticker', progress=False)
+    data = yf.download(tickers, period='7d', interval='1d', group_by='ticker', progress=False)
     movers = []
     for t in tickers:
         try:
-            close = data[t]['Close']
+            close = data[t]['Close'].dropna()
             if len(close) < 2:
                 continue
-            change = (close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100
-            movers.append({'symbol': t, 'change': change, 'last': close.iloc[-1]})
+            last_two = close[-2:]
+            change = (last_two.iloc[-1] - last_two.iloc[-2]) / last_two.iloc[-2] * 100
+            movers.append({'symbol': t, 'change': change, 'last': last_two.iloc[-1]})
         except Exception:
             continue
-    movers = sorted(movers, key=lambda x: x['change'], reverse=True)
-    gainers = movers[:10]
-    losers = movers[-10:][::-1]
+    # Only positive gainers and negative losers
+    gainers = [m for m in sorted(movers, key=lambda x: x['change'], reverse=True) if m['change'] > 0][:10]
+    losers = [m for m in sorted(movers, key=lambda x: x['change']) if m['change'] < 0][:10]
     return gainers, losers
 
 def get_market_summary():
@@ -118,15 +118,16 @@ def get_market_summary():
         'BTC-USD': 'BTC-USD',
         'ETH-USD': 'ETH-USD',
     }
-    data = yf.download(list(indices.values()), period='2d', interval='1d', group_by='ticker', progress=False)
+    data = yf.download(list(indices.values()), period='7d', interval='1d', group_by='ticker', progress=False)
     summary = []
     for name, symbol in indices.items():
         try:
-            close = data[symbol]['Close']
+            close = data[symbol]['Close'].dropna()
             if len(close) < 2:
                 continue
-            change = (close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100
-            summary.append({'name': name, 'last': close.iloc[-1], 'change': change})
+            last_two = close[-2:]
+            change = (last_two.iloc[-1] - last_two.iloc[-2]) / last_two.iloc[-2] * 100
+            summary.append({'name': name, 'last': last_two.iloc[-1], 'change': change})
         except Exception:
             continue
     return summary
@@ -161,13 +162,17 @@ def home_screen():
     # Sentiment
     st.markdown(f"<h5 style='color:#1a73e8;'>Market Sentiment: {sentiment_icon} <span style='color:#444;'>{sentiment}</span></h5>", unsafe_allow_html=True)
     st.markdown("<hr>", unsafe_allow_html=True)
-    # Top Gainers/Losers
+    # Top Gainers/Losers Ticker
     st.markdown("<h5 style='color:green;'>Top 10 Gainers</h5>", unsafe_allow_html=True)
-    gainer_ticker = " | ".join([f"<b>{g['symbol']}</b> ({g['change']:+.2f}%)" for g in gainers])
-    st.markdown(f"<div class='ticker'>{gainer_ticker}</div>", unsafe_allow_html=True)
+    gainer_ticker = "&nbsp;&nbsp;&nbsp;".join([f"<span style='color:limegreen; font-weight:bold; font-size:1.1em;'><b>{g['symbol']}</b> ({g['change']:+.2f}%)</span>" for g in gainers])
+    if len(gainers) < 10:
+        gainer_ticker += "&nbsp;" * (10 - len(gainers)) * 20
+    st.markdown(f"<div class='ticker' style='width:100vw; min-width:100%;'>{gainer_ticker}</div>", unsafe_allow_html=True)
     st.markdown("<h5 style='color:red;'>Top 10 Losers</h5>", unsafe_allow_html=True)
-    loser_ticker = " | ".join([f"<b>{l['symbol']}</b> ({l['change']:+.2f}%)" for l in losers])
-    st.markdown(f"<div class='ticker'>{loser_ticker}</div>", unsafe_allow_html=True)
+    loser_ticker = "&nbsp;&nbsp;&nbsp;".join([f"<span style='color:#ff3333; font-weight:bold; font-size:1.1em;'><b>{l['symbol']}</b> ({l['change']:+.2f}%)</span>" for l in losers])
+    if len(losers) < 10:
+        loser_ticker += "&nbsp;" * (10 - len(losers)) * 20
+    st.markdown(f"<div class='ticker' style='width:100vw; min-width:100%;'>{loser_ticker}</div>", unsafe_allow_html=True)
     st.markdown("<hr>", unsafe_allow_html=True)
     # Quick Links
     st.markdown("<h5 style='color:#1a73e8;'>🔗 Quick Links</h5>", unsafe_allow_html=True)

@@ -162,8 +162,8 @@ def best_worst_day():
         worst = returns.idxmin()
         best_str = str(best.date()) if hasattr(best, 'date') else str(best)
         worst_str = str(worst.date()) if hasattr(worst, 'date') else str(worst)
-        st.write(f"Best day: <b>{best_str}</b> ({returns.max()*100:.2f}%)", unsafe_allow_html=True)
-        st.write(f"Worst day: <b>{worst_str}</b> ({returns.min()*100:.2f}%)", unsafe_allow_html=True)
+        st.markdown(f"Best day: <b>{best_str}</b> ({returns.max()*100:.2f}%)", unsafe_allow_html=True)
+        st.markdown(f"Worst day: <b>{worst_str}</b> ({returns.min()*100:.2f}%)", unsafe_allow_html=True)
     else:
         st.write('Not enough data for best/worst day analysis.')
 

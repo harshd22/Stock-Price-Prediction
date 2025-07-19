@@ -150,25 +150,6 @@ def home_screen():
     st.markdown("<h4>Welcome to the Dynamic Stock Price Prediction & Financial Insights Platform!</h4>", unsafe_allow_html=True)
     st.write("Explore market overview, trending stocks, news, and more.")
 
-    # --- Dashboard Navigation Buttons ---
-    st.markdown("<h5 style='color:#1a73e8;'>🚀 Quick Access</h5>", unsafe_allow_html=True)
-    nav_cols = st.columns(3)
-    nav_clicked = None
-    with nav_cols[0]:
-        if st.button('🔎 Stock Screener', key='nav_screener'):
-            nav_clicked = 'Stock Screener'
-    with nav_cols[1]:
-        if st.button('📊 Stock Comparison', key='nav_comparison'):
-            nav_clicked = 'Stock Comparison'
-    with nav_cols[2]:
-        if st.button('📰 News', key='nav_news'):
-            nav_clicked = 'News'
-
-    if nav_clicked:
-        st.session_state['nav_section'] = nav_clicked
-        st.experimental_rerun()
-        return  # <--- This ensures no further code runs after rerun
-
     # Market Overview Cards (unchanged)
     indices = {
         'S&P 500': '^GSPC',
@@ -507,19 +488,7 @@ def stock_comparison():
 option_menu = [
     'Home', 'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Stock Screener', 'Stock Comparison', 'Financial Info', 'News', 'Predict'
 ]
-
-# Set default section if not in session state
-if 'nav_section' not in st.session_state:
-    st.session_state['nav_section'] = 'Home'
-
-# Sidebar selectbox always visible, uses session state as default
-selected = st.sidebar.selectbox('Choose Section', option_menu, index=option_menu.index(st.session_state['nav_section']))
-
-# If user selects a new section from sidebar, update session state
-if selected != st.session_state['nav_section']:
-    st.session_state['nav_section'] = selected
-    st.experimental_rerun()
-
+selected = st.sidebar.selectbox('Choose Section', option_menu)
 if selected == 'Home':
     home_screen()
 elif selected == 'Recent Data':

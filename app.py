@@ -11,6 +11,7 @@ from xgboost import XGBRegressor
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.metrics import r2_score, mean_absolute_error
 import requests
+import random
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Stock Price Prediction & Insights", layout="wide")
@@ -142,49 +143,92 @@ def get_market_sentiment(gainers, losers):
     else:
         return 'Neutral', '🟡'
 
+# --- Home Screen: Market Overview, Trending, Fun Fact, Sentiment Poll ---
 def home_screen():
     st.markdown("---")
     st.markdown("<h2 style='color:#1a73e8;'>🏠 Home</h2>", unsafe_allow_html=True)
     st.markdown("<h4>Welcome to the Dynamic Stock Price Prediction & Financial Insights Platform!</h4>", unsafe_allow_html=True)
-    st.write("Explore top gainers and losers, get predictions, news, and more.")
-    gainers, losers = get_top_movers()
-    market_summary = get_market_summary()
-    sentiment, sentiment_icon = get_market_sentiment(gainers, losers)
-    # Market Summary
-    st.markdown("<h5 style='color:#1a73e8;'>🌍 Market Summary</h5>", unsafe_allow_html=True)
-    cols = st.columns(len(market_summary))
-    for i, idx in enumerate(market_summary):
-        color = 'green' if idx['change'] > 0 else 'red' if idx['change'] < 0 else 'gray'
-        arrow = '▲' if idx['change'] > 0 else '▼' if idx['change'] < 0 else '■'
-        with cols[i]:
-            st.markdown(f"<div style='text-align:center;'><b>{idx['name']}</b><br><span style='color:{color};'>{idx['last']:.2f} {arrow} {idx['change']:+.2f}%</span></div>", unsafe_allow_html=True)
+    st.write("Explore market overview, trending stocks, news, and more.")
+
+    # Market Overview Cards (unchanged)
+    indices = {
+        'S&P 500': '^GSPC',
+        'NASDAQ': '^IXIC',
+        'DOW JONES': '^DJI',
+        'NIFTY 50': '^NSEI',
+        'BTC-USD': 'BTC-USD',
+        'ETH-USD': 'ETH-USD',
+    }
+    data = yf.download(list(indices.values()), period='7d', interval='1d', group_by='ticker', progress=False)
+    cols = st.columns(len(indices))
+    for i, (name, symbol) in enumerate(indices.items()):
+        try:
+            close = data[symbol]['Close'].dropna()
+            if len(close) < 2:
+                continue
+            last_two = close[-2:]
+            change = (last_two.iloc[-1] - last_two.iloc[-2]) / last_two.iloc[-2] * 100
+            color = 'green' if change > 0 else 'red' if change < 0 else 'gray'
+            arrow = '▲' if change > 0 else '▼' if change < 0 else '■'
+            with cols[i]:
+                st.markdown(f"<div style='text-align:center; background:#23272f; border-radius:10px; padding:1em; margin-bottom:1em;'><b>{name}</b><br><span style='color:{color}; font-size:1.2em;'>{last_two.iloc[-1]:.2f} {arrow} {change:+.2f}%</span></div>", unsafe_allow_html=True)
+        except Exception:
+            continue
+
+    # Trending Stocks (unchanged)
+    st.markdown("<h5 style='color:#1a73e8;'>🔥 Trending Stocks</h5>", unsafe_allow_html=True)
+    trending = ['AAPL', 'TSLA', 'NVDA', 'AMZN', 'META', 'GOOGL', 'MSFT', 'NFLX', 'AMD', 'BTC-USD']
+    tdata = yf.download(trending, period='7d', interval='1d', group_by='ticker', progress=False)
+    tcols = st.columns(len(trending))
+    for i, t in enumerate(trending):
+        try:
+            close = tdata[t]['Close'].dropna()
+            if len(close) < 2:
+                continue
+            last_two = close[-2:]
+            change = (last_two.iloc[-1] - last_two.iloc[-2]) / last_two.iloc[-2] * 100
+            color = 'green' if change > 0 else 'red' if change < 0 else 'gray'
+            arrow = '▲' if change > 0 else '▼' if change < 0 else '■'
+            with tcols[i]:
+                st.markdown(f"<div style='text-align:center; background:#181c20; border-radius:10px; padding:0.5em;'><b>{t}</b><br><span style='color:{color};'>{last_two.iloc[-1]:.2f} {arrow} {change:+.2f}%</span></div>", unsafe_allow_html=True)
+        except Exception:
+            continue
+
     st.markdown("<hr>", unsafe_allow_html=True)
-    # Sentiment
-    st.markdown(f"<h5 style='color:#1a73e8;'>Market Sentiment: {sentiment_icon} <span style='color:#444;'>{sentiment}</span></h5>", unsafe_allow_html=True)
-    st.markdown("<hr>", unsafe_allow_html=True)
-    # Top Gainers/Losers Ticker
-    st.markdown("<h5 style='color:green;'>Top 10 Gainers</h5>", unsafe_allow_html=True)
-    gainer_ticker = "&nbsp;&nbsp;&nbsp;".join([f"<span style='color:limegreen; font-weight:bold; font-size:1.1em;'><b>{g['symbol']}</b> ({g['change']:+.2f}%)</span>" for g in gainers])
-    if len(gainers) < 10:
-        gainer_ticker += "&nbsp;" * (10 - len(gainers)) * 20
-    st.markdown(f"<div class='ticker' style='width:100vw; min-width:100%;'>{gainer_ticker}</div>", unsafe_allow_html=True)
-    st.markdown("<h5 style='color:red;'>Top 10 Losers</h5>", unsafe_allow_html=True)
-    loser_ticker = "&nbsp;&nbsp;&nbsp;".join([f"<span style='color:#ff3333; font-weight:bold; font-size:1.1em;'><b>{l['symbol']}</b> ({l['change']:+.2f}%)</span>" for l in losers])
-    if len(losers) < 10:
-        loser_ticker += "&nbsp;" * (10 - len(losers)) * 20
-    st.markdown(f"<div class='ticker' style='width:100vw; min-width:100%;'>{loser_ticker}</div>", unsafe_allow_html=True)
-    st.markdown("<hr>", unsafe_allow_html=True)
-    # Quick Links
-    st.markdown("<h5 style='color:#1a73e8;'>🔗 Quick Links</h5>", unsafe_allow_html=True)
-    qcols = st.columns(4)
-    with qcols[0]:
-        st.markdown("<a href='https://finance.yahoo.com/' target='_blank'>Yahoo Finance</a>", unsafe_allow_html=True)
-    with qcols[1]:
-        st.markdown("<a href='https://www.tradingview.com/' target='_blank'>TradingView</a>", unsafe_allow_html=True)
-    with qcols[2]:
-        st.markdown("<a href='https://www.cnbc.com/markets/' target='_blank'>CNBC Markets</a>", unsafe_allow_html=True)
-    with qcols[3]:
-        st.markdown("<a href='https://www.investing.com/' target='_blank'>Investing.com</a>", unsafe_allow_html=True)
+
+    # --- Did You Know? Finance Fact ---
+    st.markdown("<h5 style='color:#1a73e8;'>💡 Did You Know?</h5>", unsafe_allow_html=True)
+    finance_facts = [
+        "The first stock exchange was established in Amsterdam in 1602.",
+        "The term 'bull market' comes from the way a bull attacks, thrusting its horns upward.",
+        "Warren Buffett bought his first stock at age 11.",
+        "The New York Stock Exchange was founded in 1792.",
+        "The ticker symbol for Berkshire Hathaway is BRK.A and BRK.B.",
+        "The largest one-day percentage drop in the Dow Jones was on Black Monday, 1987.",
+        "The S&P 500 covers about 80% of the U.S. equity market capitalization.",
+        "India's Sensex index was launched in 1986.",
+        "The word 'stock' comes from the Old English 'stocc', meaning tree trunk.",
+        "The longest bull market in history lasted from 2009 to 2020."
+    ]
+    st.info(random.choice(finance_facts))
+
+    # --- Market Sentiment Poll ---
+    st.markdown("<h5 style='color:#1a73e8;'>📊 Market Sentiment Poll</h5>", unsafe_allow_html=True)
+    if 'sentiment_votes' not in st.session_state:
+        st.session_state['sentiment_votes'] = {'Bullish': 0, 'Bearish': 0, 'Neutral': 0}
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button('🐂 Bullish'):
+            st.session_state['sentiment_votes']['Bullish'] += 1
+    with col2:
+        if st.button('🐻 Bearish'):
+            st.session_state['sentiment_votes']['Bearish'] += 1
+    with col3:
+        if st.button('😐 Neutral'):
+            st.session_state['sentiment_votes']['Neutral'] += 1
+    st.write("**Current Poll Results:**")
+    st.write(st.session_state['sentiment_votes'])
+
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("<h4>🔍 Use the sidebar to search for a stock and explore predictions, news, and more!</h4>", unsafe_allow_html=True)
 
@@ -341,9 +385,62 @@ def model_engine(model, num):
     forecast_df = pd.DataFrame(data={'Date': forecast_dates, 'Forecast': forecast})
     st.dataframe(forecast_df, use_container_width=True)
 
+# --- Stock Screener Section ---
+def stock_screener():
+    st.markdown("---")
+    st.markdown("<h2 style='color:#1a73e8;'>🔎 Stock Screener</h2>", unsafe_allow_html=True)
+    # Static demo data for screener
+    screener_data = pd.DataFrame([
+        {'Symbol': 'AAPL', 'Name': 'Apple', 'Sector': 'Technology', 'Price': 190.0},
+        {'Symbol': 'TSLA', 'Name': 'Tesla', 'Sector': 'Automotive', 'Price': 250.0},
+        {'Symbol': 'RELIANCE.NS', 'Name': 'Reliance', 'Sector': 'Energy', 'Price': 2800.0},
+        {'Symbol': 'TCS.NS', 'Name': 'TCS', 'Sector': 'Technology', 'Price': 3700.0},
+        {'Symbol': 'HDFCBANK.NS', 'Name': 'HDFC Bank', 'Sector': 'Banking', 'Price': 1700.0},
+        {'Symbol': 'INFY.NS', 'Name': 'Infosys', 'Sector': 'Technology', 'Price': 1500.0},
+        {'Symbol': 'ICICIBANK.NS', 'Name': 'ICICI Bank', 'Sector': 'Banking', 'Price': 1100.0},
+        {'Symbol': 'ITC.NS', 'Name': 'ITC', 'Sector': 'FMCG', 'Price': 450.0},
+        {'Symbol': 'SBIN.NS', 'Name': 'SBI', 'Sector': 'Banking', 'Price': 600.0},
+        {'Symbol': 'LT.NS', 'Name': 'L&T', 'Sector': 'Infrastructure', 'Price': 3500.0},
+    ])
+    sector = st.selectbox('Select Sector', ['All'] + sorted(screener_data['Sector'].unique()))
+    min_price, max_price = st.slider('Price Range', 0, 4000, (0, 4000))
+    filtered = screener_data.copy()
+    if sector != 'All':
+        filtered = filtered[filtered['Sector'] == sector]
+    filtered = filtered[(filtered['Price'] >= min_price) & (filtered['Price'] <= max_price)]
+    st.dataframe(filtered, use_container_width=True)
+
+# --- Stock Comparison Section ---
+def stock_comparison():
+    st.markdown("---")
+    st.markdown("<h2 style='color:#1a73e8;'>📊 Stock Comparison</h2>", unsafe_allow_html=True)
+    all_stocks = ['AAPL', 'TSLA', 'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS', 'ITC.NS', 'SBIN.NS', 'LT.NS', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA']
+    stock1 = st.selectbox('Select First Stock', all_stocks, key='cmp1')
+    stock2 = st.selectbox('Select Second Stock', all_stocks, key='cmp2')
+    if stock1 and stock2 and stock1 != stock2:
+        data = yf.download([stock1, stock2], period='7d', interval='1d', group_by='ticker', progress=False)
+        results = []
+        for s in [stock1, stock2]:
+            try:
+                close = data[s]['Close'].dropna()
+                if len(close) < 2:
+                    continue
+                last_two = close[-2:]
+                change = (last_two.iloc[-1] - last_two.iloc[-2]) / last_two.iloc[-2] * 100
+                results.append({'Symbol': s, 'Last Price': last_two.iloc[-1], 'Change %': change})
+            except Exception:
+                continue
+        if results:
+            df = pd.DataFrame(results)
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.write('Not enough data for comparison.')
+    else:
+        st.write('Select two different stocks to compare.')
+
 # --- Main App Logic ---
 option_menu = [
-    'Home', 'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Financial Info', 'News', 'Predict'
+    'Home', 'Recent Data', 'Line Chart', 'Buy/Sell Recommendation', 'Stock Screener', 'Stock Comparison', 'Financial Info', 'News', 'Predict'
 ]
 selected = st.sidebar.selectbox('Choose Section', option_menu)
 if selected == 'Home':
@@ -354,6 +451,10 @@ elif selected == 'Line Chart':
     line_chart()
 elif selected == 'Buy/Sell Recommendation':
     buy_sell_recommendation()
+elif selected == 'Stock Screener':
+    stock_screener()
+elif selected == 'Stock Comparison':
+    stock_comparison()
 elif selected == 'Financial Info':
     financial_info()
 elif selected == 'News':
